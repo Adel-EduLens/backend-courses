@@ -1,0 +1,106 @@
+{
+  "info": {
+    "name": "NASU Auth API Collection",
+    "description": "Unified endpoints for NASU authentication (Student, Admin, Teacher, TA).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Student Signup",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"name\": \"John Student\",\n    \"phone\": \"0123456789\",\n    \"password\": \"password123\",\n    \"facultyId\": \"YOUR_FACULTY_ID_HERE\",\n    \"gradId\": \"YOUR_GRAD_ID_HERE\"\n}"
+            },
+            "url": {
+              "raw": "{{base-url}}/api/auth/student/signup",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "auth", "student", "signup"]
+            }
+          }
+        },
+        {
+          "name": "Universal Login (Student)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"phone\": \"01100000000\",\n    \"password\": \"password123\",\n    \"role\": \"student\"\n}"
+            },
+            "url": {
+              "raw": "{{base-url}}/api/auth/student/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "auth", "student", "login"]
+            }
+          }
+        },
+        {
+          "name": "Universal Login (Teacher)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"phone\": \"01119915593\",\n    \"password\": \"password123\",\n    \"role\": \"teacher\"\n}"
+            },
+            "url": {
+              "raw": "{{base-url}}/api/auth/admin/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "auth", "admin", "login"]
+            }
+          }
+        },
+        {
+          "name": "Universal Login (Admin)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n    \"phone\": \"01101804085\",\n    \"password\": \"password123\",\n    \"role\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{base-url}}/api/auth/admin/login",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3000",
+              "path": ["api", "auth", "admin", "login"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
