@@ -8,6 +8,7 @@ dotenv.config({ path: envFile });
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/nasu';
 
 import Admin from '../modules/admin/admin.model.js';
+import { Course } from '../modules/course/course.model.js';
 
 const seedDatabase = async () => {
   try {
@@ -26,12 +27,23 @@ const seedDatabase = async () => {
         role: 'admin'
       });
       console.log('✅ Admin account seeded successfully.');
-    } else {
-      console.log('ℹ️ Admin account already exists, skipping.');
+    }
+
+    // 3. Seed Test Course
+    const course = await Course.findOne({ title: 'Test Course' });
+    if (!course) {
+      await Course.create({
+        title: 'Test Course',
+        brief: 'A simple course to test Kashier payment integration.',
+        img: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&q=80&w=2070',
+        price: 150
+      });
+      console.log('✅ Test course seeded.');
     }
 
     // 3. Close connection
     await mongoose.connection.close();
+
     console.log('👋 Seeding process finished, connection closed.');
     process.exit(0);
   } catch (error) {

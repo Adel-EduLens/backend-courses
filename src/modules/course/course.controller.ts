@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
-import Course from './course.model.js';
+import { Course } from './course.model.js';
 import Enrollment from './enrollment.model.js';
+import { Payment } from '../payment/payment.model.js';
+import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
 
 /**
  * @desc    Get all courses
@@ -43,7 +45,7 @@ export const getCourse = async (req: Request, res: Response, next: NextFunction)
 };
 
 /**
- * @desc    Enroll in a course (Public)
+ * @desc    Enroll in a course — initiates Kashier payment if course has a price
  * @route   POST /api/courses/enroll
  * @access  Public
  */
@@ -51,40 +53,72 @@ export const enrollInCourse = async (req: Request, res: Response, next: NextFunc
   try {
     const { courseId, fullName, email, phone, additionalInfo } = req.body;
 
-    // Check if course exists
     const course = await Course.findById(courseId);
     if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found'
+      return res.status(404).json({ success: false, message: 'Course not found' });
+    }
+
+    // Free course → direct enrollment
+    if (!course.price || course.price === 0) {
+      const enrollment = await Enrollment.create({ referenceId: courseId, referenceModel: 'Course', fullName, email, phone, additionalInfo });
+      return res.status(201).json({
+        success: true,
+        message: 'Successfully enrolled in the course!',
+        data: enrollment
       });
     }
 
-    // Create enrollment
-    const enrollment = await Enrollment.create({
-      courseId,
-      fullName,
-      email,
-      phone,
-      additionalInfo
+    // Paid course → initiate Kashier payment
+    // Cancel any stale pending payments for the same course + email
+    await Payment.updateMany(
+      { referenceId: courseId, referenceModel: 'Course', 'customer.email': email, status: 'pending' },
+      { status: 'cancelled' }
+    );
+
+    const orderId = `Course_${courseId}_${Date.now()}`;
+    const amountWithFees = calculateAmountWithFees(course.price);
+
+    const payment = await Payment.create({
+      orderId,
+      referenceId: courseId,
+      referenceModel: 'Course',
+      amount: course.price,
+      status: 'pending',
+      customer: { name: fullName, email, phone }
     });
 
-    res.status(201).json({
+    // Store additionalInfo in paymentDetails so webhook can use it
+    await Payment.findByIdAndUpdate(payment._id, {
+      paymentDetails: { additionalInfo }
+    });
+
+    const sessionResponse = await createPaymentSession({
+      amount: amountWithFees,
+      merchantOrderId: orderId,
+      customerName: fullName,
+      customerEmail: email,
+      customerPhone: phone
+    });
+
+    return res.status(200).json({
       success: true,
-      message: 'Successfully enrolled in the course!',
-      data: enrollment
+      data: {
+        requiresPayment: true,
+        orderId,
+        sessionUrl: sessionResponse.sessionUrl
+      }
     });
   } catch (error: any) {
-    // Handle duplicate enrollment
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'You have already enrolled in this course with this email.'
+        message: 'You have already enrolled in this course with this phone number.'
       });
     }
     next(error);
   }
 };
+
 /**
  * @desc    Create a new course
  * @route   POST /api/courses
@@ -115,16 +149,10 @@ export const updateCourse = async (req: Request, res: Response, next: NextFuncti
     });
 
     if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found'
-      });
+      return res.status(404).json({ success: false, message: 'Course not found' });
     }
 
-    res.status(200).json({
-      success: true,
-      data: course
-    });
+    res.status(200).json({ success: true, data: course });
   } catch (error) {
     next(error);
   }
@@ -140,16 +168,10 @@ export const deleteCourse = async (req: Request, res: Response, next: NextFuncti
     const course = await Course.findByIdAndDelete(req.params.id);
 
     if (!course) {
-      return res.status(404).json({
-        success: false,
-        message: 'Course not found'
-      });
+      return res.status(404).json({ success: false, message: 'Course not found' });
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'Course deleted successfully'
-    });
+    res.status(200).json({ success: true, message: 'Course deleted successfully' });
   } catch (error) {
     next(error);
   }
@@ -157,16 +179,13 @@ export const deleteCourse = async (req: Request, res: Response, next: NextFuncti
 
 /**
  * @desc    Get all enrollments
- * @route   GET /api/courses/enrollments
+ * @route   GET /api/admin/courses/enrollments
  * @access  Private/Admin
  */
 export const getEnrollments = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const enrollments = await Enrollment.find().populate('courseId', 'title');
-    res.status(200).json({
-      success: true,
-      data: enrollments
-    });
+    const enrollments = await Enrollment.find().populate('referenceId', 'title');
+    res.status(200).json({ success: true, data: enrollments });
   } catch (error) {
     next(error);
   }

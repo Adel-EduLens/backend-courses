@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
 import { InitiativeCourse } from './initiative_course.model.js';
 import { Initiative } from './initiative.model.js';
+import Enrollment from '../course/enrollment.model.js';
+import { Payment } from '../payment/payment.model.js';
+import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
 
 /**
  * @desc    Get all initiative courses
@@ -163,6 +166,69 @@ export const createInitiative = async (req: Request, res: Response, next: NextFu
     res.status(201).json({
       success: true,
       data: initiative
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Enroll in an initiative course — initiates Kashier payment
+ * @route   POST /api/initiatives/enroll
+ * @access  Public
+ */
+export const enrollInInitiativeCourse = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { initiativeCourseId, fullName, email, phone, additionalInfo } = req.body;
+
+    const course = await InitiativeCourse.findById(initiativeCourseId);
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Initiative course not found' });
+    }
+
+    // Prevent duplicate enrollment before hitting payment
+    const existing = await Enrollment.findOne({ referenceId: initiativeCourseId, referenceModel: 'InitiativeCourse', phone });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already enrolled in this initiative course with this phone number.'
+      });
+    }
+
+    // Cancel stale pending payments for the same course + email
+    await Payment.updateMany(
+      { referenceId: initiativeCourseId, referenceModel: 'InitiativeCourse', 'customer.email': email, status: 'pending' },
+      { status: 'cancelled' }
+    );
+
+    const orderId = `InitiativeCourse_${initiativeCourseId}_${Date.now()}`;
+    const amountWithFees = calculateAmountWithFees(course.price);
+
+    await Payment.create({
+      orderId,
+      referenceId: initiativeCourseId,
+      referenceModel: 'InitiativeCourse',
+      amount: course.price,
+      status: 'pending',
+      customer: { name: fullName, email, phone },
+      paymentDetails: { additionalInfo }
+    });
+
+    const sessionResponse = await createPaymentSession({
+      amount: amountWithFees,
+      merchantOrderId: orderId,
+      customerName: fullName,
+      customerEmail: email,
+      customerPhone: phone
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        requiresPayment: true,
+        orderId,
+        sessionUrl: sessionResponse.sessionUrl
+      }
     });
   } catch (error) {
     next(error);

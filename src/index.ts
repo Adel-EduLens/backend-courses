@@ -11,6 +11,7 @@ import eventAdminRoutes from './modules/event/event.admin.routes.js';
 import courseAdminRoutes from './modules/course/course.admin.routes.js';
 import initiativeRoutes from './modules/initiative/initiative.routes.js';
 import initiativeAdminRoutes from './modules/initiative/initiative.admin.routes.js';
+import paymentRoutes from './modules/payment/payment.routes.js';
 import { initEventStatusCron } from './utils/cronJobs.util.js';
 
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
@@ -37,6 +38,7 @@ app.use('/api/admin/events', eventAdminRoutes);
 app.use('/api/admin/courses', courseAdminRoutes);
 app.use('/api/initiatives', initiativeRoutes);
 app.use('/api/admin/initiatives', initiativeAdminRoutes);
+app.use('/api/payments', paymentRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello from TypeScript Express with MongoDB!');

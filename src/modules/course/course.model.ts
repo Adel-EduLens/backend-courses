@@ -4,6 +4,7 @@ export interface ICourse extends Document {
   title: string;
   brief: string;
   img: string;
+  price: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -22,11 +23,15 @@ const courseSchema = new Schema<ICourse>({
   img: {
     type: String,
     required: true
+  },
+  price: {
+    type: Number,
+    required: true,
+    min: 0,
+    default: 0
   }
 }, {
   timestamps: true
 });
 
-const Course = mongoose.model<ICourse>('Course', courseSchema);
-
-export default Course;
+export const Course = mongoose.model<ICourse>('Course', courseSchema);
