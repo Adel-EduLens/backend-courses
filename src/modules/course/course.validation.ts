@@ -6,10 +6,10 @@ export const createCourseSchema = Joi.object({
   aboutCourse: Joi.array().items(
     Joi.object({
       title: Joi.string().required(),
-      items: Joi.array().items(Joi.string().trim())
-    })
-  ),
-  targetAudience: Joi.array().items(Joi.string().trim()),
+      items: Joi.array().items(Joi.string().allow('').trim())
+    }).options({ stripUnknown: true })
+  ).default([]),
+  targetAudience: Joi.array().items(Joi.string().allow('').trim()).default([]),
   img: Joi.string().required(),
   price: Joi.number().min(0).default(0)
 });
@@ -20,11 +20,11 @@ export const updateCourseSchema = Joi.object({
   aboutCourse: Joi.array().items(
     Joi.object({
       title: Joi.string().required(),
-      items: Joi.array().items(Joi.string().trim())
-    })
+      items: Joi.array().items(Joi.string().allow('').trim())
+    }).options({ stripUnknown: true })
   ),
-  targetAudience: Joi.array().items(Joi.string().trim()),
-  img: Joi.string(),
+  targetAudience: Joi.array().items(Joi.string().allow('').trim()),
+  img: Joi.string().allow(''),
   price: Joi.number().min(0)
 });
 

@@ -7,6 +7,11 @@ export interface ISpeaker {
   img: string;
 }
 
+export interface IPartner {
+  name: string;
+  img: string;
+}
+
 export interface IActivity {
   name: string;
   description: string;
@@ -20,7 +25,7 @@ export interface IEvent extends Document {
   date: Date;
   eventGallery: string[];
   speakers: ISpeaker[];
-  partners: string[];
+  partners: IPartner[];
   activities: IActivity[];
   aboutEvent: string;
   keyObjectives: string[];
@@ -32,6 +37,11 @@ const speakerSchema = new Schema({
   name: { type: String, required: true },
   title: { type: String, required: true },
   brief: { type: String, required: true },
+  img: { type: String, required: true }
+}, { _id: false });
+
+const partnerSchema = new Schema({
+  name: { type: String, required: true },
   img: { type: String, required: true }
 }, { _id: false });
 
@@ -68,9 +78,7 @@ const eventSchema = new Schema<IEvent>({
     type: String
   }],
   speakers: [speakerSchema],
-  partners: [{
-    type: String
-  }],
+  partners: [partnerSchema],
   activities: [activitySchema],
   aboutEvent: {
     type: String,

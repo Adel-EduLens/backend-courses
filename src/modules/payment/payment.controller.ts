@@ -88,13 +88,17 @@ export const handleKashierWebhook = async (req: Request, res: Response, next: Ne
 
 
     if (status === 'SUCCESS') {
-      const payment = await Payment.findOneAndUpdate(
-        { orderId: merchantOrderId } as any,
-        { status: 'success', transactionId, paymentDetails: data },
-        { new: true }
-      );
+      const payment = await Payment.findOne({ orderId: merchantOrderId });
 
       if (payment) {
+        payment.status = 'success';
+        payment.transactionId = transactionId;
+        payment.paymentDetails = {
+          ...(payment.paymentDetails || {}),
+          kashierResponse: data
+        };
+        await payment.save();
+
         const name = payment.customer?.name ?? '';
         const email = payment.customer?.email ?? '';
         const phone = payment.customer?.phone ?? '';
@@ -119,10 +123,15 @@ export const handleKashierWebhook = async (req: Request, res: Response, next: Ne
         }
       }
     } else if (status === 'FAILED') {
-      await Payment.findOneAndUpdate(
-        { orderId: merchantOrderId } as any,
-        { status: 'failed', paymentDetails: data }
-      );
+      const payment = await Payment.findOne({ orderId: merchantOrderId });
+      if (payment) {
+        payment.status = 'failed';
+        payment.paymentDetails = {
+          ...(payment.paymentDetails || {}),
+          kashierResponse: data
+        };
+        await payment.save();
+      }
     }
 
     res.status(200).json({ success: true });

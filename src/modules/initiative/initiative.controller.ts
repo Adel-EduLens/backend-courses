@@ -70,7 +70,7 @@ export const createInitiativeCourse = async (req: Request, res: Response, next: 
 export const updateInitiativeCourse = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const course = await InitiativeCourse.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true
     });
 

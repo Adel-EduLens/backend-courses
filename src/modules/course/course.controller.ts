@@ -88,6 +88,15 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json({ success: false, message: 'This round has already completed' });
     }
 
+    // Prevent duplicate enrollment before hitting payment
+    const existing = await Enrollment.findOne({ referenceId: roundId, referenceModel: 'Round', phone });
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already enrolled in this round with this phone number.'
+      });
+    }
+
     const course = round.course as any;
     const price = course.price;
 
@@ -116,10 +125,7 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
       referenceModel: 'Round',
       amount: price,
       status: 'pending',
-      customer: { name: fullName, email, phone }
-    });
-
-    await Payment.findByIdAndUpdate(payment._id, {
+      customer: { name: fullName, email, phone },
       paymentDetails: { additionalInfo }
     });
 
@@ -161,6 +167,22 @@ export const createCourse = async (req: Request, res: Response, next: NextFuncti
     if (req.file) {
       courseData.img = `/uploads/courses/${req.file.filename}`;
     }
+
+    if (typeof courseData.aboutCourse === 'string') {
+      try {
+        courseData.aboutCourse = JSON.parse(courseData.aboutCourse);
+      } catch (e) {
+        delete courseData.aboutCourse;
+      }
+    }
+
+    if (typeof courseData.targetAudience === 'string') {
+      try {
+        courseData.targetAudience = JSON.parse(courseData.targetAudience);
+      } catch (e) {
+        delete courseData.targetAudience;
+      }
+    }
     const course = await Course.create(courseData);
     res.status(201).json({
       success: true,
@@ -183,8 +205,24 @@ export const updateCourse = async (req: Request, res: Response, next: NextFuncti
       courseData.img = `/uploads/courses/${req.file.filename}`;
     }
 
+    if (typeof courseData.aboutCourse === 'string') {
+      try {
+        courseData.aboutCourse = JSON.parse(courseData.aboutCourse);
+      } catch (e) {
+        delete courseData.aboutCourse;
+      }
+    }
+
+    if (typeof courseData.targetAudience === 'string') {
+      try {
+        courseData.targetAudience = JSON.parse(courseData.targetAudience);
+      } catch (e) {
+        delete courseData.targetAudience;
+      }
+    }
+
     const course = await Course.findByIdAndUpdate(req.params.id, courseData, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true
     });
 
@@ -252,7 +290,7 @@ export const createRound = async (req: Request, res: Response, next: NextFunctio
 export const updateRound = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const round = await Round.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true
     });
 
@@ -316,7 +354,7 @@ export const createLecture = async (req: Request, res: Response, next: NextFunct
 export const updateLecture = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const lecture = await Lecture.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
+      returnDocument: 'after',
       runValidators: true
     });
 

@@ -124,6 +124,16 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       });
     }
 
+    if (Array.isArray(req.body.partners)) {
+      req.body.partners = req.body.partners.map((partner: any, index: number) => {
+        const file = getFileByFieldName(req, `partner_img_${index}`);
+        if (file) {
+          partner.img = getFileUrl(req, file);
+        }
+        return partner;
+      });
+    }
+
     const currentGallery = Array.isArray(req.body.eventGallery) ? req.body.eventGallery : [];
     const event = await Event.create({
       ...req.body,
@@ -166,6 +176,16 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
           speaker.img = getFileUrl(req, file);
         }
         return speaker;
+      });
+    }
+
+    if (Array.isArray(req.body.partners)) {
+      req.body.partners = req.body.partners.map((partner: any, index: number) => {
+        const file = getFileByFieldName(req, `partner_img_${index}`);
+        if (file) {
+          partner.img = getFileUrl(req, file);
+        }
+        return partner;
       });
     }
 

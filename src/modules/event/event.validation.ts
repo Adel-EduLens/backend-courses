@@ -4,7 +4,12 @@ const speakerValidationSchema = Joi.object({
   name: Joi.string().required(),
   title: Joi.string().required(),
   brief: Joi.string().required(),
-  img: Joi.string().required()
+  img: Joi.string().allow('').required()
+});
+
+const partnerValidationSchema = Joi.object({
+  name: Joi.string().required(),
+  img: Joi.string().allow('').required()
 });
 
 const activityValidationSchema = Joi.object({
@@ -20,7 +25,7 @@ export const createEventSchema = Joi.object({
   date: Joi.date().required(),
   eventGallery: Joi.array().items(Joi.string()),
   speakers: Joi.array().items(speakerValidationSchema),
-  partners: Joi.array().items(Joi.string()),
+  partners: Joi.array().items(partnerValidationSchema),
   activities: Joi.array().items(activityValidationSchema),
   aboutEvent: Joi.string().required(),
   keyObjectives: Joi.array().items(Joi.string())
@@ -34,7 +39,7 @@ export const updateEventSchema = Joi.object({
   date: Joi.date(),
   eventGallery: Joi.array().items(Joi.string()),
   speakers: Joi.array().items(speakerValidationSchema),
-  partners: Joi.array().items(Joi.string()),
+  partners: Joi.array().items(partnerValidationSchema),
   activities: Joi.array().items(activityValidationSchema),
   aboutEvent: Joi.string(),
   keyObjectives: Joi.array().items(Joi.string())
