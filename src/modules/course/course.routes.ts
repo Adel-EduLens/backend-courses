@@ -1,7 +1,7 @@
 import express from 'express';
-import { getCourses, getCourse, enrollInCourse } from './course.controller.js';
+import { getCourses, getCourse, enrollInRound } from './course.controller.js';
 import { validateRequest } from '../../middlewares/validation.middleware.js';
-import { enrollCourseSchema } from './course.validation.js';
+import { enrollRoundSchema } from './course.validation.js';
 
 const router = express.Router();
 
@@ -10,6 +10,6 @@ const router = express.Router();
  */
 router.get('/', getCourses);
 router.get('/:id', getCourse);
-router.post('/enroll', validateRequest(enrollCourseSchema), enrollInCourse);
+router.post('/enroll', validateRequest(enrollRoundSchema), enrollInRound);
 
 export default router;

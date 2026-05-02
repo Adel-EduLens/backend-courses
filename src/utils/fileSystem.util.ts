@@ -31,10 +31,14 @@ export const getRelativePathFromUrl = (url: string | null | undefined): string |
    if (!url) return null;
    try {
       const urlObj = new URL(url);
+      if (!urlObj.pathname.startsWith("/uploads/")) {
+         return null;
+      }
+
       // Remove leading slash from pathname
-      return urlObj.pathname.substring(1); 
+      return urlObj.pathname.substring(1);
    } catch (e) {
-      // If not a valid URL, assume it's already a relative path or just return as is
-      return url;
+      // If not a valid URL, only allow known local upload paths.
+      return url.startsWith("uploads/") ? url : null;
    }
 };

@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IEnrollment extends Document {
   referenceId: mongoose.Types.ObjectId;
-  referenceModel: 'Course' | 'InitiativeCourse';
+  referenceModel: 'Round' | 'InitiativeCourse';
   fullName: string;
   email: string;
   phone: string;
@@ -21,7 +21,7 @@ const enrollmentSchema = new Schema<IEnrollment>({
   referenceModel: {
     type: String,
     required: true,
-    enum: ['Course', 'InitiativeCourse']
+    enum: ['Round', 'InitiativeCourse']
   },
   fullName: {
     type: String,

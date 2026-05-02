@@ -31,7 +31,7 @@ const paymentSchema = new Schema<IPayment>({
   referenceModel: {
     type: String,
     required: true,
-    enum: ['Course', 'InitiativeCourse', 'Event'] // Add more models as needed
+    enum: ['Round', 'InitiativeCourse', 'Event']
   },
   amount: {
     type: Number,
