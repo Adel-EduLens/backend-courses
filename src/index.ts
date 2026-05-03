@@ -45,6 +45,15 @@ app.get('/', (req: Request, res: Response) => {
   res.send('Hello from TypeScript Express with MongoDB!');
 });
 
+app.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+    db: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+  });
+});
+
 
 
 // Global Error Handler 
