@@ -1,8 +1,8 @@
 import express from 'express';
-import { createInitiativeCourse, updateInitiativeCourse, deleteInitiativeCourse, createInitiative } from './initiative.controller.js';
+import { createInitiativeCourse, updateInitiativeCourse, deleteInitiativeCourse, createInitiative, updateInitiative } from './initiative.controller.js';
 import { protect, restrictTo } from '../../middlewares/auth.middleware.js';
 import { validateRequest } from '../../middlewares/validation.middleware.js';
-import { createInitiativeCourseSchema, updateInitiativeCourseSchema, createInitiativeSchema } from './initiative.validation.js';
+import { createInitiativeCourseSchema, updateInitiativeCourseSchema, createInitiativeSchema, updateInitiativeSchema } from './initiative.validation.js';
 
 const router = express.Router();
 
@@ -13,6 +13,7 @@ router.use(protect);
 router.use(restrictTo('admin'));
 
 router.post('/all', validateRequest(createInitiativeSchema), createInitiative);
+router.patch('/all/:id', validateRequest(updateInitiativeSchema), updateInitiative);
 router.post('/', validateRequest(createInitiativeCourseSchema), createInitiativeCourse);
 router.patch('/:id', validateRequest(updateInitiativeCourseSchema), updateInitiativeCourse);
 router.delete('/:id', deleteInitiativeCourse);

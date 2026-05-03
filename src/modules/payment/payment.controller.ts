@@ -108,6 +108,9 @@ export const handleKashierWebhook = async (req: Request, res: Response, next: Ne
           await Enrollment.create({
             referenceId: payment.referenceId,
             referenceModel: payment.referenceModel,
+            enrollmentTarget: payment.paymentDetails?.enrollmentTarget,
+            initiativePackageId: payment.paymentDetails?.initiativePackageId,
+            selectedCourses: payment.paymentDetails?.selectedCourses,
             fullName: name,
             email,
             phone,

@@ -2,7 +2,10 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IEnrollment extends Document {
   referenceId: mongoose.Types.ObjectId;
-  referenceModel: 'Round' | 'InitiativeCourse';
+  referenceModel: 'Round' | 'InitiativeCourse' | 'Initiative';
+  enrollmentTarget?: 'track' | 'package';
+  initiativePackageId?: string;
+  selectedCourses?: mongoose.Types.ObjectId[];
   fullName: string;
   email: string;
   phone: string;
@@ -21,8 +24,19 @@ const enrollmentSchema = new Schema<IEnrollment>({
   referenceModel: {
     type: String,
     required: true,
-    enum: ['Round', 'InitiativeCourse']
+    enum: ['Round', 'InitiativeCourse', 'Initiative']
   },
+  enrollmentTarget: {
+    type: String,
+    enum: ['track', 'package']
+  },
+  initiativePackageId: {
+    type: String
+  },
+  selectedCourses: [{
+    type: Schema.Types.ObjectId,
+    ref: 'InitiativeCourse'
+  }],
   fullName: {
     type: String,
     required: true,
@@ -50,7 +64,10 @@ const enrollmentSchema = new Schema<IEnrollment>({
   timestamps: true
 });
 
-enrollmentSchema.index({ referenceId: 1, phone: 1 }, { unique: true });
+enrollmentSchema.index(
+  { referenceId: 1, phone: 1, enrollmentTarget: 1, initiativePackageId: 1 },
+  { unique: true }
+);
 
 const Enrollment = mongoose.model<IEnrollment>('Enrollment', enrollmentSchema);
 

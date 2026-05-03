@@ -5,6 +5,11 @@ import Enrollment from '../course/enrollment.model.js';
 import { Payment } from '../payment/payment.model.js';
 import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
 
+const initiativePopulate = [
+  { path: 'track' },
+  { path: 'packages.courses' }
+];
+
 /**
  * @desc    Get all initiative courses
  * @route   GET /api/initiatives
@@ -122,7 +127,7 @@ export const deleteInitiativeCourse = async (req: Request, res: Response, next: 
  */
 export const getInitiatives = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const initiatives = await Initiative.find().populate('courses');
+    const initiatives = await Initiative.find().populate(initiativePopulate);
     res.status(200).json({
       success: true,
       data: initiatives
@@ -139,7 +144,7 @@ export const getInitiatives = async (req: Request, res: Response, next: NextFunc
  */
 export const getInitiative = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const initiative = await Initiative.findById(req.params.id).populate('courses');
+    const initiative = await Initiative.findById(req.params.id).populate(initiativePopulate);
     if (!initiative) {
       return res.status(404).json({
         success: false,
@@ -173,45 +178,187 @@ export const createInitiative = async (req: Request, res: Response, next: NextFu
 };
 
 /**
- * @desc    Enroll in an initiative course — initiates Kashier payment
- * @route   POST /api/initiatives/enroll
- * @access  Public
+ * @desc    Update an initiative
+ * @route   PATCH /api/admin/initiatives/all/:id
+ * @access  Private/Admin
  */
-export const enrollInInitiativeCourse = async (req: Request, res: Response, next: NextFunction) => {
+export const updateInitiative = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { initiativeCourseId, fullName, email, phone, additionalInfo } = req.body;
+    const initiative = await Initiative.findByIdAndUpdate(req.params.id, req.body, {
+      returnDocument: 'after',
+      runValidators: true
+    }).populate(initiativePopulate);
 
-    const course = await InitiativeCourse.findById(initiativeCourseId);
-    if (!course) {
-      return res.status(404).json({ success: false, message: 'Initiative course not found' });
-    }
-
-    // Prevent duplicate enrollment before hitting payment
-    const existing = await Enrollment.findOne({ referenceId: initiativeCourseId, referenceModel: 'InitiativeCourse', phone });
-    if (existing) {
-      return res.status(400).json({
+    if (!initiative) {
+      return res.status(404).json({
         success: false,
-        message: 'You have already enrolled in this initiative course with this phone number.'
+        message: 'Initiative not found'
       });
     }
 
-    // Cancel stale pending payments for the same course + email
+    res.status(200).json({
+      success: true,
+      data: initiative
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Enroll in an initiative track or package — initiates Kashier payment
+ * @route   POST /api/initiatives/enroll
+ * @access  Public
+ */
+export const enrollInInitiative = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const {
+      initiativeId,
+      enrollmentTarget,
+      packageId,
+      selectedCourseIds = [],
+      fullName,
+      email,
+      phone,
+      additionalInfo
+    } = req.body;
+
+    const initiative = await Initiative.findById(initiativeId).populate(initiativePopulate);
+    if (!initiative) {
+      return res.status(404).json({ success: false, message: 'Initiative not found' });
+    }
+
+    const duplicateQuery: Record<string, unknown> = {
+      referenceId: initiativeId,
+      referenceModel: 'Initiative',
+      phone,
+      enrollmentTarget
+    };
+
+    if (enrollmentTarget === 'package' && packageId) {
+      duplicateQuery.initiativePackageId = packageId;
+    }
+
+    const existing = await Enrollment.findOne(duplicateQuery);
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already enrolled in this initiative selection with this phone number.'
+      });
+    }
+
+    let amount = 0;
+    let selectedCourses: string[] = [];
+    let packageIdentifier: string | undefined;
+
+    if (enrollmentTarget === 'track') {
+      const track = initiative.track as any;
+      if (!track) {
+        return res.status(400).json({ success: false, message: 'This initiative does not have a track configured yet.' });
+      }
+
+      amount = track.price ?? 0;
+      selectedCourses = [track._id.toString()];
+    } else {
+      const initiativePackage = initiative.packages.find(
+        (item: any) => item._id?.toString() === packageId
+      ) as any;
+
+      if (!initiativePackage) {
+        return res.status(404).json({ success: false, message: 'Initiative package not found' });
+      }
+
+      packageIdentifier = initiativePackage._id.toString();
+      const packageCourseIds = initiativePackage.courses.map((course: any) => course._id.toString());
+
+      if (initiativePackage.type === 'full') {
+        selectedCourses = packageCourseIds;
+      } else {
+        const uniqueSelectedCourseIds = Array.from(
+          new Set(selectedCourseIds as string[])
+        ) as string[];
+
+        if (uniqueSelectedCourseIds.length === 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Select at least one course for a custom package.'
+          });
+        }
+
+        if (uniqueSelectedCourseIds.length > initiativePackage.maxCourses) {
+          return res.status(400).json({
+            success: false,
+            message: `You can select up to ${initiativePackage.maxCourses} courses in this custom package.`
+          });
+        }
+
+        const hasInvalidCourse = uniqueSelectedCourseIds.some((courseId) => !packageCourseIds.includes(courseId));
+        if (hasInvalidCourse) {
+          return res.status(400).json({
+            success: false,
+            message: 'One or more selected courses do not belong to this package.'
+          });
+        }
+
+        selectedCourses = uniqueSelectedCourseIds;
+      }
+
+      amount = initiativePackage.price ?? 0;
+    }
+
+    if (amount === 0) {
+      const enrollmentData: Record<string, unknown> = {
+        referenceId: initiativeId,
+        referenceModel: 'Initiative',
+        enrollmentTarget,
+        selectedCourses,
+        fullName,
+        email,
+        phone,
+        additionalInfo
+      };
+
+      if (packageIdentifier) {
+        enrollmentData.initiativePackageId = packageIdentifier;
+      }
+
+      const enrollment = await Enrollment.create(enrollmentData);
+
+      return res.status(201).json({
+        success: true,
+        message: 'Successfully enrolled in the initiative!',
+        data: enrollment
+      });
+    }
+
     await Payment.updateMany(
-      { referenceId: initiativeCourseId, referenceModel: 'InitiativeCourse', 'customer.email': email, status: 'pending' },
+      {
+        referenceId: initiativeId,
+        referenceModel: 'Initiative',
+        'customer.email': email,
+        status: 'pending',
+        'paymentDetails.enrollmentTarget': enrollmentTarget,
+        ...(packageIdentifier ? { 'paymentDetails.initiativePackageId': packageIdentifier } : {})
+      },
       { status: 'cancelled' }
     );
 
-    const orderId = `InitiativeCourse_${initiativeCourseId}_${Date.now()}`;
-    const amountWithFees = calculateAmountWithFees(course.price);
+    const orderId = `Initiative_${initiativeId}_${Date.now()}`;
+    const amountWithFees = calculateAmountWithFees(amount);
 
     await Payment.create({
       orderId,
-      referenceId: initiativeCourseId,
-      referenceModel: 'InitiativeCourse',
-      amount: course.price,
+      referenceId: initiativeId,
+      referenceModel: 'Initiative',
+      amount,
       status: 'pending',
       customer: { name: fullName, email, phone },
-      paymentDetails: { additionalInfo }
+      paymentDetails: {
+        additionalInfo,
+        enrollmentTarget,
+        initiativePackageId: packageIdentifier,
+        selectedCourses
+      }
     });
 
     const sessionResponse = await createPaymentSession({
@@ -231,6 +378,12 @@ export const enrollInInitiativeCourse = async (req: Request, res: Response, next
       }
     });
   } catch (error) {
+    if ((error as any).code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have already enrolled in this initiative selection with this phone number.'
+      });
+    }
     next(error);
   }
 };
