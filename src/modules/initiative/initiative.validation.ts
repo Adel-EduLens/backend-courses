@@ -7,8 +7,9 @@ const initiativeCourseSchema = Joi.object({
   title: Joi.string().required(),
   description: Joi.string().required(),
   img: Joi.string().required(),
-  brief: Joi.string().required()
-});
+  brief: Joi.string().required(),
+  price: Joi.number().min(0).default(0)
+}).unknown(true);
 
 export const createInitiativeCourseSchema = initiativeCourseSchema.fork(['_id'], (schema) => schema.forbidden());
 
@@ -26,33 +27,38 @@ const initiativePackageSchema = Joi.object({
     otherwise: Joi.forbidden()
   }),
   courses: Joi.array().items(initiativeCourseSchema).required()
-});
+}).unknown(true);
 
 export const createInitiativeSchema = Joi.object({
   title: Joi.string().required(),
   description: Joi.string().required(),
   img: Joi.string().required(),
-  track: initiativeCourseSchema.required(),
+  tracks: Joi.array().items(initiativeCourseSchema).min(1).required(),
   packages: Joi.array().items(initiativePackageSchema).default([]),
   startDate: Joi.date().iso().required(),
   endDate: Joi.date().iso().greater(Joi.ref('startDate')).required()
-});
+}).unknown(true);
 
 export const updateInitiativeSchema = Joi.object({
   title: Joi.string(),
   description: Joi.string(),
   img: Joi.string(),
-  track: initiativeCourseSchema,
+  tracks: Joi.array().items(initiativeCourseSchema).min(1),
   packages: Joi.array().items(initiativePackageSchema),
   startDate: Joi.date().iso(),
   endDate: Joi.date().iso()
-});
+}).unknown(true);
 
 export const enrollInitiativeSchema = Joi.object({
   initiativeId: objectIdSchema.required(),
   enrollmentTarget: Joi.string().valid('track', 'package').required(),
   packageId: Joi.when('enrollmentTarget', {
     is: 'package',
+    then: objectIdSchema.required(),
+    otherwise: Joi.forbidden()
+  }),
+  trackId: Joi.when('enrollmentTarget', {
+    is: 'track',
     then: objectIdSchema.required(),
     otherwise: Joi.forbidden()
   }),

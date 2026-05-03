@@ -13,7 +13,7 @@ export interface IInitiative extends Document {
   title: string;
   description: string;
   img: string;
-  track: mongoose.Types.ObjectId;
+  tracks: mongoose.Types.ObjectId[];
   packages: IInitiativePackage[];
   startDate: Date;
   endDate: Date;
@@ -72,11 +72,11 @@ const initiativeSchema = new Schema<IInitiative>({
     type: String,
     required: true
   },
-  track: {
+  tracks: [{
     type: Schema.Types.ObjectId,
     ref: 'InitiativeCourse',
     required: true
-  },
+  }],
   packages: {
     type: [initiativePackageSchema],
     default: []

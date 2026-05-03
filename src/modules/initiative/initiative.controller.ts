@@ -4,9 +4,10 @@ import { Initiative } from './initiative.model.js';
 import Enrollment from '../course/enrollment.model.js';
 import { Payment } from '../payment/payment.model.js';
 import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
+import { sendBulkMessage } from '../../utils/wapilot.service.js';
 
 const initiativePopulate = [
-  { path: 'track' },
+  { path: 'tracks' },
   { path: 'packages.courses' }
 ];
 
@@ -31,7 +32,7 @@ type InitiativePayload = {
   title: string;
   description: string;
   img: string;
-  track: InitiativeCoursePayload;
+  tracks: InitiativeCoursePayload[];
   packages: InitiativePackagePayload[];
   startDate: string;
   endDate: string;
@@ -71,13 +72,18 @@ async function upsertInitiativeCourse(coursePayload: InitiativeCoursePayload) {
 async function buildInitiativeReferences(
   payload: InitiativePayload,
   previousInitiative?: {
-    track?: { toString: () => string };
+    tracks?: Array<{ toString: () => string }>;
     packages?: Array<{ courses?: Array<{ toString: () => string }> }>;
   } | null
 ) {
   const retainedCourseIds = new Set<string>();
-  const trackId = (await upsertInitiativeCourse(payload.track)).toString();
-  retainedCourseIds.add(trackId);
+  const tracksIds = [];
+
+  for (const trackPayload of payload.tracks ?? []) {
+    const trackId = (await upsertInitiativeCourse(trackPayload)).toString();
+    retainedCourseIds.add(trackId);
+    tracksIds.push(trackId);
+  }
 
   const packages = [];
 
@@ -103,8 +109,8 @@ async function buildInitiativeReferences(
   if (previousInitiative) {
     const previousCourseIds = new Set<string>();
 
-    if (previousInitiative.track) {
-      previousCourseIds.add(previousInitiative.track.toString());
+    for (const trackId of previousInitiative.tracks ?? []) {
+      previousCourseIds.add(trackId.toString());
     }
 
     for (const packageItem of previousInitiative.packages ?? []) {
@@ -121,7 +127,7 @@ async function buildInitiativeReferences(
   }
 
   return {
-    track: trackId,
+    tracks: tracksIds,
     packages
   };
 }
@@ -230,6 +236,172 @@ export const deleteInitiativeCourse = async (req: Request, res: Response, next: 
     res.status(200).json({
       success: true,
       message: 'Initiative course deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ── Initiative Course Lectures ──────────────────────────────────────
+
+const lectureDateTimeFormatter = new Intl.DateTimeFormat('en-EG', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+  timeZone: 'Africa/Cairo'
+});
+
+const formatLectureStartTime = (date: Date) => lectureDateTimeFormatter.format(date);
+
+const normalizePhoneForWapilot = (phone: string) => {
+  const digits = phone.replace(/[^0-9]/g, '');
+  if (digits.startsWith('20')) return digits;
+  if (digits.startsWith('0')) return '2' + digits;
+  return '20' + digits;
+};
+
+/**
+ * @desc    Add a lecture to an initiative course
+ * @route   POST /api/admin/initiatives/:id/lectures
+ * @access  Private/Admin
+ */
+export const addInitiativeCourseLecture = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const course = await InitiativeCourse.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Initiative course not found' });
+    }
+
+    course.lectures.push(req.body);
+    await course.save();
+
+    const addedLecture = course.lectures[course.lectures.length - 1];
+    res.status(201).json({ success: true, data: addedLecture });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update a lecture in an initiative course
+ * @route   PATCH /api/admin/initiatives/:id/lectures/:lectureId
+ * @access  Private/Admin
+ */
+export const updateInitiativeCourseLecture = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const course = await InitiativeCourse.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Initiative course not found' });
+    }
+
+    const lecture = course.lectures.id(req.params.lectureId as string);
+    if (!lecture) {
+      return res.status(404).json({ success: false, message: 'Lecture not found' });
+    }
+
+    lecture.set(req.body);
+    await course.save();
+
+    res.status(200).json({ success: true, data: lecture });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Delete a lecture from an initiative course
+ * @route   DELETE /api/admin/initiatives/:id/lectures/:lectureId
+ * @access  Private/Admin
+ */
+export const deleteInitiativeCourseLecture = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const course = await InitiativeCourse.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Initiative course not found' });
+    }
+
+    const lecture = course.lectures.id(req.params.lectureId as string);
+    if (!lecture) {
+      return res.status(404).json({ success: false, message: 'Lecture not found' });
+    }
+
+    course.lectures.pull({ _id: req.params.lectureId });
+    await course.save();
+
+    res.status(200).json({ success: true, message: 'Lecture deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Notify enrolled students about an initiative lecture via WhatsApp
+ * @route   POST /api/admin/initiatives/:id/lectures/:lectureId/notify-students
+ * @access  Private/Admin
+ */
+export const notifyInitiativeLectureStudents = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const course = await InitiativeCourse.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({ success: false, message: 'Initiative course not found' });
+    }
+
+    const lecture = course.lectures.id(req.params.lectureId as string);
+    if (!lecture) {
+      return res.status(404).json({ success: false, message: 'Lecture not found' });
+    }
+
+    if (!lecture.meetingUrl) {
+      return res.status(400).json({ success: false, message: 'Add a meeting URL before notifying students' });
+    }
+
+    // Find all initiatives that reference this course (in packages or track)
+    const initiatives = await Initiative.find({
+      $or: [
+        { track: course._id },
+        { 'packages.courses': course._id }
+      ]
+    });
+
+    const initiativeIds = initiatives.map((i) => i._id);
+
+    // Find enrollments for those initiatives that include this course
+    const enrollments = await Enrollment.find({
+      referenceId: { $in: initiativeIds },
+      referenceModel: 'Initiative',
+      selectedCourses: course._id
+    }).select('phone');
+
+    if (enrollments.length === 0) {
+      return res.status(400).json({ success: false, message: 'No enrolled students found for this course' });
+    }
+
+    const phones = Array.from(
+      new Set(
+        enrollments
+          .map((enrollment) => normalizePhoneForWapilot(enrollment.phone))
+          .filter(Boolean)
+      )
+    );
+
+    if (phones.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid student phone numbers found' });
+    }
+
+    const message = `Lecture reminder: "${lecture.title}" for ${course.title} starts at ${formatLectureStartTime(new Date(lecture.startDate))}. Meeting URL: ${lecture.meetingUrl}`;
+
+    const results = await sendBulkMessage(phones, message);
+    const sentCount = results.filter((result: any) => result.success).length;
+    const failedCount = results.length - sentCount;
+
+    res.status(200).json({
+      success: failedCount === 0,
+      message: failedCount === 0 ? 'Students notified successfully' : 'Some notifications failed to send',
+      data: {
+        totalStudents: phones.length,
+        sentCount,
+        failedCount,
+        results
+      }
     });
   } catch (error) {
     next(error);
@@ -563,6 +735,94 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
         message: 'You have already enrolled in this initiative selection with this phone number.'
       });
     }
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get enrollments for a specific initiative course
+ * @route   GET /api/admin/initiatives/courses/:id/enrollments
+ * @access  Private (Admin)
+ */
+export const getInitiativeCourseEnrollments = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id: courseId } = req.params;
+
+    // 1. Find the initiative that contains this course in its tracks or packages
+    const initiative = await Initiative.findOne({
+      $or: [
+        { tracks: courseId },
+        { 'packages.courses': courseId }
+      ]
+    });
+
+    if (!initiative) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found in any initiative'
+      });
+    }
+
+    // 2. Identify packages that include this course
+    const packageIds = initiative.packages
+      .filter(pkg => pkg.courses.some(cId => cId.toString() === courseId))
+      .map(pkg => pkg._id.toString());
+
+    // 3. Find all relevant enrollments
+    const enrollments = await Enrollment.find({
+      referenceId: initiative._id,
+      referenceModel: 'Initiative',
+      $or: [
+        // Enrolled in "Track" (has access to all tracks)
+        { enrollmentTarget: 'track' },
+        // Enrolled in a "Full" package that includes this course
+        { 
+          enrollmentTarget: 'package', 
+          initiativePackageId: { $in: packageIds },
+          $or: [
+            { selectedCourses: { $exists: false } },
+            { selectedCourses: { $size: 0 } }
+          ]
+        },
+        // Enrolled in a "Custom" package and selected this course
+        { 
+          enrollmentTarget: 'package', 
+          selectedCourses: courseId 
+        }
+      ]
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: enrollments.length,
+      data: enrollments
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get enrollments for a specific initiative package
+ * @route   GET /api/admin/initiatives/packages/:id/enrollments
+ * @access  Private (Admin)
+ */
+export const getInitiativePackageEnrollments = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id: packageId } = req.params;
+
+    const enrollments = await Enrollment.find({
+      referenceModel: 'Initiative',
+      enrollmentTarget: 'package',
+      initiativePackageId: packageId
+    }).sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: enrollments.length,
+      data: enrollments
+    });
+  } catch (error) {
     next(error);
   }
 };
