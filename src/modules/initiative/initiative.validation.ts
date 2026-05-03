@@ -2,27 +2,20 @@ import Joi from 'joi';
 
 const objectIdSchema = Joi.string().hex().length(24);
 
-export const createInitiativeCourseSchema = Joi.object({
+const initiativeCourseSchema = Joi.object({
+  _id: objectIdSchema,
   title: Joi.string().required(),
   description: Joi.string().required(),
-  price: Joi.number().min(0).required(),
   img: Joi.string().required(),
-  brief: Joi.string().required(),
-  startTime: Joi.string().required(),
-  endTime: Joi.string().required()
+  brief: Joi.string().required()
 });
 
-export const updateInitiativeCourseSchema = Joi.object({
-  title: Joi.string(),
-  description: Joi.string(),
-  price: Joi.number().min(0),
-  img: Joi.string(),
-  brief: Joi.string(),
-  startTime: Joi.string(),
-  endTime: Joi.string()
-});
+export const createInitiativeCourseSchema = initiativeCourseSchema.fork(['_id'], (schema) => schema.forbidden());
+
+export const updateInitiativeCourseSchema = initiativeCourseSchema.min(1);
 
 const initiativePackageSchema = Joi.object({
+  _id: objectIdSchema,
   title: Joi.string().required(),
   description: Joi.string().allow('', null),
   type: Joi.string().valid('custom', 'full').required(),
@@ -32,14 +25,14 @@ const initiativePackageSchema = Joi.object({
     then: Joi.number().min(1).required(),
     otherwise: Joi.forbidden()
   }),
-  courses: Joi.array().items(objectIdSchema).min(1).required()
+  courses: Joi.array().items(initiativeCourseSchema).required()
 });
 
 export const createInitiativeSchema = Joi.object({
   title: Joi.string().required(),
   description: Joi.string().required(),
   img: Joi.string().required(),
-  track: objectIdSchema.required(),
+  track: initiativeCourseSchema.required(),
   packages: Joi.array().items(initiativePackageSchema).default([]),
   startDate: Joi.date().iso().required(),
   endDate: Joi.date().iso().greater(Joi.ref('startDate')).required()
@@ -49,7 +42,7 @@ export const updateInitiativeSchema = Joi.object({
   title: Joi.string(),
   description: Joi.string(),
   img: Joi.string(),
-  track: objectIdSchema,
+  track: initiativeCourseSchema,
   packages: Joi.array().items(initiativePackageSchema),
   startDate: Joi.date().iso(),
   endDate: Joi.date().iso()

@@ -10,6 +10,122 @@ const initiativePopulate = [
   { path: 'packages.courses' }
 ];
 
+type InitiativeCoursePayload = {
+  _id?: string;
+  title: string;
+  description: string;
+  img: string;
+  brief: string;
+};
+
+type InitiativePackagePayload = {
+  title: string;
+  description?: string;
+  type: 'custom' | 'full';
+  price: number;
+  maxCourses?: number;
+  courses: InitiativeCoursePayload[];
+};
+
+type InitiativePayload = {
+  title: string;
+  description: string;
+  img: string;
+  track: InitiativeCoursePayload;
+  packages: InitiativePackagePayload[];
+  startDate: string;
+  endDate: string;
+};
+
+async function upsertInitiativeCourse(coursePayload: InitiativeCoursePayload) {
+  if (coursePayload._id) {
+    const updatedCourse = await InitiativeCourse.findByIdAndUpdate(
+      coursePayload._id,
+      {
+        title: coursePayload.title,
+        description: coursePayload.description,
+        img: coursePayload.img,
+        brief: coursePayload.brief
+      },
+      {
+        returnDocument: 'after',
+        runValidators: true
+      }
+    );
+
+    if (updatedCourse) {
+      return updatedCourse._id;
+    }
+  }
+
+  const createdCourse = await InitiativeCourse.create({
+    title: coursePayload.title,
+    description: coursePayload.description,
+    img: coursePayload.img,
+    brief: coursePayload.brief
+  });
+
+  return createdCourse._id;
+}
+
+async function buildInitiativeReferences(
+  payload: InitiativePayload,
+  previousInitiative?: {
+    track?: { toString: () => string };
+    packages?: Array<{ courses?: Array<{ toString: () => string }> }>;
+  } | null
+) {
+  const retainedCourseIds = new Set<string>();
+  const trackId = (await upsertInitiativeCourse(payload.track)).toString();
+  retainedCourseIds.add(trackId);
+
+  const packages = [];
+
+  for (const packagePayload of payload.packages ?? []) {
+    const courseIds: string[] = [];
+
+    for (const coursePayload of packagePayload.courses ?? []) {
+      const courseId = (await upsertInitiativeCourse(coursePayload)).toString();
+      retainedCourseIds.add(courseId);
+      courseIds.push(courseId);
+    }
+
+    packages.push({
+      title: packagePayload.title,
+      description: packagePayload.description ?? '',
+      type: packagePayload.type,
+      price: packagePayload.price,
+      ...(packagePayload.type === 'custom' ? { maxCourses: packagePayload.maxCourses } : {}),
+      courses: courseIds
+    });
+  }
+
+  if (previousInitiative) {
+    const previousCourseIds = new Set<string>();
+
+    if (previousInitiative.track) {
+      previousCourseIds.add(previousInitiative.track.toString());
+    }
+
+    for (const packageItem of previousInitiative.packages ?? []) {
+      for (const courseId of packageItem.courses ?? []) {
+        previousCourseIds.add(courseId.toString());
+      }
+    }
+
+    const courseIdsToDelete = [...previousCourseIds].filter((courseId) => !retainedCourseIds.has(courseId));
+
+    if (courseIdsToDelete.length > 0) {
+      await InitiativeCourse.deleteMany({ _id: { $in: courseIdsToDelete } });
+    }
+  }
+
+  return {
+    track: trackId,
+    packages
+  };
+}
+
 /**
  * @desc    Get all initiative courses
  * @route   GET /api/initiatives
@@ -167,10 +283,21 @@ export const getInitiative = async (req: Request, res: Response, next: NextFunct
  */
 export const createInitiative = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const initiative = await Initiative.create(req.body);
+    const payload = req.body as InitiativePayload;
+    const courseReferences = await buildInitiativeReferences(payload);
+    const initiative = await Initiative.create({
+      title: payload.title,
+      description: payload.description,
+      img: payload.img,
+      startDate: payload.startDate,
+      endDate: payload.endDate,
+      ...courseReferences
+    } as any);
+    const populatedInitiative = await Initiative.findById((initiative as any)._id).populate(initiativePopulate);
+
     res.status(201).json({
       success: true,
-      data: initiative
+      data: populatedInitiative
     });
   } catch (error) {
     next(error);
@@ -184,10 +311,47 @@ export const createInitiative = async (req: Request, res: Response, next: NextFu
  */
 export const updateInitiative = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const initiative = await Initiative.findByIdAndUpdate(req.params.id, req.body, {
+    const existingInitiative = await Initiative.findById(req.params.id);
+
+    if (!existingInitiative) {
+      return res.status(404).json({
+        success: false,
+        message: 'Initiative not found'
+      });
+    }
+
+    const payload = req.body as InitiativePayload;
+    const courseReferences = await buildInitiativeReferences(payload, existingInitiative);
+
+    const initiative = await Initiative.findByIdAndUpdate(req.params.id, {
+      title: payload.title,
+      description: payload.description,
+      img: payload.img,
+      startDate: payload.startDate,
+      endDate: payload.endDate,
+      ...courseReferences
+    } as any, {
       returnDocument: 'after',
       runValidators: true
     }).populate(initiativePopulate);
+
+    res.status(200).json({
+      success: true,
+      data: initiative
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Delete an initiative
+ * @route   DELETE /api/admin/initiatives/all/:id
+ * @access  Private/Admin
+ */
+export const deleteInitiative = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const initiative = await Initiative.findById(req.params.id);
 
     if (!initiative) {
       return res.status(404).json({
@@ -196,9 +360,24 @@ export const updateInitiative = async (req: Request, res: Response, next: NextFu
       });
     }
 
+    const courseIds = new Set<string>();
+    courseIds.add(initiative.track.toString());
+
+    for (const packageItem of initiative.packages ?? []) {
+      for (const courseId of packageItem.courses ?? []) {
+        courseIds.add(courseId.toString());
+      }
+    }
+
+    await Initiative.findByIdAndDelete(req.params.id);
+
+    if (courseIds.size > 0) {
+      await InitiativeCourse.deleteMany({ _id: { $in: [...courseIds] } });
+    }
+
     res.status(200).json({
       success: true,
-      data: initiative
+      message: 'Initiative deleted successfully'
     });
   } catch (error) {
     next(error);
@@ -257,7 +436,7 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
         return res.status(400).json({ success: false, message: 'This initiative does not have a track configured yet.' });
       }
 
-      amount = track.price ?? 0;
+      amount = 0;
       selectedCourses = [track._id.toString()];
     } else {
       const initiativePackage = initiative.packages.find(
