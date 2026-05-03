@@ -13,6 +13,8 @@ import initiativeRoutes from './modules/initiative/initiative.routes.js';
 import initiativeAdminRoutes from './modules/initiative/initiative.admin.routes.js';
 import paymentRoutes from './modules/payment/payment.routes.js';
 import { initEventStatusCron } from './utils/cronJobs.util.js';
+import trustedBadgeRoutes from './modules/trustedBadge/trustedBadge.routes.js';
+import trustedBadgeAdminRoutes from './modules/trustedBadge/trustedBadge.admin.routes.js';
 
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
 dotenv.config({ path: envFile });
@@ -40,6 +42,8 @@ app.use('/api/admin/courses', courseAdminRoutes);
 app.use('/api/initiatives', initiativeRoutes);
 app.use('/api/admin/initiatives', initiativeAdminRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/trusted-badges', trustedBadgeRoutes);
+app.use('/api/admin/trusted-badges', trustedBadgeAdminRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello from TypeScript Express with MongoDB!');
