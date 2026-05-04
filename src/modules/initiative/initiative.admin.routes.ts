@@ -29,8 +29,9 @@ const normalizeInitiativePayload = (req: Request, res: Response, next: NextFunct
       const path = '/' + file.path.split('/public/')[1];
       if (file.fieldname === 'img') {
         req.body.img = path;
-      } else if (file.fieldname === 'trackImage') {
-        const tIdx = Number(req.body.targetTrackIndex);
+      } else if (file.fieldname.startsWith('trackImage_')) {
+        // fieldname format: trackImage_<index>
+        const tIdx = Number(file.fieldname.split('trackImage_')[1]);
         if (
           !isNaN(tIdx) && 
           req.body.tracks?.[tIdx]

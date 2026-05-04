@@ -5,6 +5,7 @@ import Enrollment from '../course/enrollment.model.js';
 import { Payment } from '../payment/payment.model.js';
 import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
 import { sendBulkMessage } from '../../utils/wapilot.service.js';
+import { PromoCode } from '../promoCode/promoCode.model.js';
 
 const initiativePopulate = [
   { path: 'tracks' },
@@ -16,6 +17,7 @@ type InitiativeCoursePayload = {
   title: string;
   description: string;
   img: string;
+  price?: number;
 };
 
 type InitiativePackagePayload = {
@@ -48,6 +50,7 @@ async function upsertInitiativeCourse(coursePayload: InitiativeCoursePayload) {
         title: coursePayload.title,
         description: coursePayload.description,
         img: coursePayload.img,
+        ...(coursePayload.price !== undefined ? { price: coursePayload.price } : {}),
       },
       {
         returnDocument: 'after',
@@ -64,6 +67,7 @@ async function upsertInitiativeCourse(coursePayload: InitiativeCoursePayload) {
     title: coursePayload.title,
     description: coursePayload.description,
     img: coursePayload.img,
+    price: coursePayload.price ?? 0,
   });
 
   return createdCourse._id;
@@ -577,7 +581,8 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
       fullName,
       email,
       phone,
-      additionalInfo
+      additionalInfo,
+      promoCode: promoCodeInput
     } = req.body;
 
     const initiative = await Initiative.findById(initiativeId).populate(initiativePopulate);
@@ -594,6 +599,8 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
 
     if (enrollmentTarget === 'package' && packageId) {
       duplicateQuery.initiativePackageId = packageId;
+    } else if (enrollmentTarget === 'track' && trackId) {
+      duplicateQuery.initiativePackageId = trackId;
     }
 
     const existing = await Enrollment.findOne(duplicateQuery);
@@ -609,13 +616,14 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
     let packageIdentifier: string | undefined;
 
     if (enrollmentTarget === 'track') {
-      const isValidTrack = initiative.tracks.some(t => t._id.toString() === trackId);
-      if (!isValidTrack) {
+      const trackDoc = initiative.tracks.find((t: any) => t._id.toString() === trackId) as any;
+      if (!trackDoc) {
         return res.status(400).json({ success: false, message: 'Track not found in this initiative.' });
       }
 
-      amount = 0;
+      amount = trackDoc.price ?? 0;
       selectedCourses = [trackId];
+      packageIdentifier = trackId;
     } else {
       const initiativePackage = initiative.packages.find(
         (item: any) => item._id?.toString() === packageId
@@ -663,7 +671,44 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
       amount = initiativePackage.price ?? 0;
     }
 
+    // Validate and apply promo code
+    let appliedPromoCode: string | undefined;
+    if (promoCodeInput && amount > 0) {
+      const promo = await PromoCode.findOneAndUpdate(
+        {
+          code: promoCodeInput.toUpperCase(),
+          isActive: true,
+          $expr: { $lt: ['$currentUses', '$maxUses'] }
+        },
+        {},
+        { new: true }
+      );
+
+      if (!promo) {
+        return res.status(400).json({ success: false, message: 'Invalid or expired promo code.' });
+      }
+
+      if (promo.applicableTo.type === 'specific') {
+        const isApplicable = promo.applicableTo.initiativePackages.some(
+          (pkg) => pkg.initiativeId.toString() === initiativeId && pkg.packageId === packageIdentifier
+        );
+        if (!isApplicable) {
+          return res.status(400).json({ success: false, message: 'This promo code does not apply to this package.' });
+        }
+      }
+
+      amount = Math.round(amount * (1 - promo.discountPercentage / 100));
+      appliedPromoCode = promo.code;
+    }
+
     if (amount === 0) {
+      if (appliedPromoCode) {
+        await PromoCode.findOneAndUpdate(
+          { code: appliedPromoCode, $expr: { $lt: ['$currentUses', '$maxUses'] } },
+          { $inc: { currentUses: 1 } }
+        );
+      }
+
       const enrollmentData: Record<string, unknown> = {
         referenceId: initiativeId,
         referenceModel: 'Initiative',
@@ -672,11 +717,14 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
         fullName,
         email,
         phone,
-        additionalInfo
+        additionalInfo,
+        promoCode: appliedPromoCode
       };
 
       if (packageIdentifier) {
         enrollmentData.initiativePackageId = packageIdentifier;
+      } else if (enrollmentTarget === 'track' && trackId) {
+        enrollmentData.initiativePackageId = trackId;
       }
 
       const enrollment = await Enrollment.create(enrollmentData);
@@ -713,8 +761,9 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
       paymentDetails: {
         additionalInfo,
         enrollmentTarget,
-        initiativePackageId: packageIdentifier,
-        selectedCourses
+        initiativePackageId: packageIdentifier || (enrollmentTarget === 'track' ? trackId : undefined),
+        selectedCourses,
+        promoCode: appliedPromoCode
       }
     });
 

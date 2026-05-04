@@ -218,14 +218,18 @@ export const getMyEnrollments = async (req: Request, res: Response, next: NextFu
     const phone = (req as any).user.phone;
 
     const enrollments = await Enrollment.find({ phone })
-      .populate({
-        path: 'referenceId',
-        populate: {
+      .populate('referenceId')
+      .sort({ createdAt: -1 });
+
+    // Manually populate 'course' only for Round enrollments to avoid StrictPopulateError
+    for (const enrollment of enrollments) {
+      if (enrollment.referenceModel === 'Round' && enrollment.referenceId) {
+        await (enrollment.referenceId as any).populate({
           path: 'course',
           select: 'title brief img'
-        }
-      })
-      .sort({ createdAt: -1 });
+        });
+      }
+    }
 
     const enrichedEnrollments = await Promise.all(enrollments.map(enrichEnrollment));
 

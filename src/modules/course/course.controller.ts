@@ -5,6 +5,7 @@ import { Lecture } from './lecture.model.js';
 import Enrollment from './enrollment.model.js';
 import { Payment } from '../payment/payment.model.js';
 import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
+import { PromoCode } from '../promoCode/promoCode.model.js';
 import { sendBulkMessage } from '../../utils/wapilot.service.js';
 
 const lectureDateTimeFormatter = new Intl.DateTimeFormat('en-EG', {
@@ -77,7 +78,7 @@ export const getCourse = async (req: Request, res: Response, next: NextFunction)
  */
 export const enrollInRound = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { roundId, fullName, email, phone, additionalInfo } = req.body;
+    const { roundId, fullName, email, phone, additionalInfo, promoCode: promoCodeInput } = req.body;
 
     const round = await Round.findById(roundId).populate('course');
     if (!round) {
@@ -98,11 +99,50 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
     }
 
     const course = round.course as any;
-    const price = course.price;
+    let price = course.price || 0;
 
-    // Free course → direct enrollment
+    // Validate and apply promo code
+    let appliedPromoCode: string | undefined;
+    if (promoCodeInput && price > 0) {
+      const promo = await PromoCode.findOneAndUpdate(
+        {
+          code: promoCodeInput.toUpperCase(),
+          isActive: true,
+          $expr: { $lt: ['$currentUses', '$maxUses'] }
+        },
+        {},
+        { new: true }
+      );
+
+      if (!promo) {
+        return res.status(400).json({ success: false, message: 'Invalid or expired promo code.' });
+      }
+
+      if (promo.applicableTo.type === 'specific') {
+        const isApplicable = promo.applicableTo.courses.some(
+          (cId) => cId.toString() === course._id.toString()
+        );
+        if (!isApplicable) {
+          return res.status(400).json({ success: false, message: 'This promo code does not apply to this course.' });
+        }
+      }
+
+      price = Math.round(price * (1 - promo.discountPercentage / 100));
+      appliedPromoCode = promo.code;
+    }
+
+    // Free course (or promo made it free) → direct enrollment
     if (!price || price === 0) {
-      const enrollment = await Enrollment.create({ referenceId: roundId, referenceModel: 'Round', fullName, email, phone, additionalInfo });
+      if (appliedPromoCode) {
+        await PromoCode.findOneAndUpdate(
+          { code: appliedPromoCode, $expr: { $lt: ['$currentUses', '$maxUses'] } },
+          { $inc: { currentUses: 1 } }
+        );
+      }
+      const enrollment = await Enrollment.create({
+        referenceId: roundId, referenceModel: 'Round', fullName, email, phone, additionalInfo,
+        ...(appliedPromoCode ? { promoCode: appliedPromoCode } : {})
+      });
       return res.status(201).json({
         success: true,
         message: 'Successfully enrolled in the round!',
@@ -126,7 +166,7 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
       amount: price,
       status: 'pending',
       customer: { name: fullName, email, phone },
-      paymentDetails: { additionalInfo }
+      paymentDetails: { additionalInfo, promoCode: appliedPromoCode }
     });
 
     const sessionResponse = await createPaymentSession({

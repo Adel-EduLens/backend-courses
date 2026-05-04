@@ -12,6 +12,7 @@ export interface IEnrollment extends Document {
   phone: string;
   additionalInfo?: string;
   paymentOrderId?: string;
+  promoCode?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -64,6 +65,10 @@ const enrollmentSchema = new Schema<IEnrollment>({
   },
   paymentOrderId: {
     type: String
+  },
+  promoCode: {
+    type: String,
+    trim: true
   }
 }, {
   timestamps: true

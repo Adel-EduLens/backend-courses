@@ -17,6 +17,8 @@ import trustedBadgeRoutes from './modules/trustedBadge/trustedBadge.routes.js';
 import trustedBadgeAdminRoutes from './modules/trustedBadge/trustedBadge.admin.routes.js';
 import studentRoutes from './modules/student/student.routes.js';
 import studentAdminRoutes from './modules/student/student.admin.routes.js';
+import promoCodeRoutes from './modules/promoCode/promoCode.routes.js';
+import promoCodeAdminRoutes from './modules/promoCode/promoCode.admin.routes.js';
 
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
 dotenv.config({ path: envFile });
@@ -48,6 +50,8 @@ app.use('/api/trusted-badges', trustedBadgeRoutes);
 app.use('/api/admin/trusted-badges', trustedBadgeAdminRoutes);
 app.use('/api/students', studentRoutes);
 app.use('/api/admin/students', studentAdminRoutes);
+app.use('/api/promo-codes', promoCodeRoutes);
+app.use('/api/admin/promo-codes', promoCodeAdminRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello from TypeScript Express with MongoDB!');

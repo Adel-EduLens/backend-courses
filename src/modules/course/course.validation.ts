@@ -72,5 +72,6 @@ export const enrollRoundSchema = Joi.object({
   phone: Joi.string().required().messages({
     'string.empty': 'Phone number is required'
   }),
-  additionalInfo: Joi.string().allow('', null)
+  additionalInfo: Joi.string().allow('', null),
+  promoCode: Joi.string().allow('', null)
 });

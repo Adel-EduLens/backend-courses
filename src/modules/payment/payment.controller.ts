@@ -3,6 +3,7 @@ import { Payment } from './payment.model.js';
 import { createPaymentSession, calculateAmountWithFees, verifyWebhookSignature, verifyTransactionStatus } from '../../utils/kashier.service.js';
 import mongoose from 'mongoose';
 import Enrollment from '../course/enrollment.model.js';
+import { PromoCode } from '../promoCode/promoCode.model.js';
 
 /**
  * @desc    Initiate a payment session
@@ -105,24 +106,42 @@ export const handleKashierWebhook = async (req: Request, res: Response, next: Ne
         const additionalInfo = payment.paymentDetails?.additionalInfo;
 
         try {
-          await Enrollment.create({
+          const enrollmentFilter = {
             referenceId: payment.referenceId,
-            referenceModel: payment.referenceModel,
-            enrollmentTarget: payment.paymentDetails?.enrollmentTarget,
-            initiativePackageId: payment.paymentDetails?.initiativePackageId,
-            selectedCourses: payment.paymentDetails?.selectedCourses,
-            fullName: name,
-            email,
             phone,
-            additionalInfo,
-            paymentOrderId: merchantOrderId
-          });
-        } catch (enrollError: any) {
-          if (enrollError.code === 11000) {
-            console.log('[Webhook] Enrollment already exists (duplicate), skipping');
-          } else {
-            console.error('[Webhook] Enrollment creation failed:', enrollError.message);
+            enrollmentTarget: payment.paymentDetails?.enrollmentTarget,
+            initiativePackageId: payment.paymentDetails?.initiativePackageId
+          };
+
+          const enrollmentUpdate = {
+            $set: {
+              referenceModel: payment.referenceModel,
+              selectedCourses: payment.paymentDetails?.selectedCourses,
+              fullName: name,
+              email,
+              additionalInfo,
+              paymentOrderId: merchantOrderId,
+              promoCode: payment.paymentDetails?.promoCode
+            }
+          };
+
+          const result = await Enrollment.findOneAndUpdate(
+            enrollmentFilter,
+            enrollmentUpdate,
+            { upsert: true, returnDocument: 'after', runValidators: true }
+          );
+
+          console.log('[Webhook] Enrollment upserted:', result._id);
+
+          // Increment promo code usage on successful enrollment
+          if (payment.paymentDetails?.promoCode) {
+            await PromoCode.findOneAndUpdate(
+              { code: payment.paymentDetails.promoCode, $expr: { $lt: ['$currentUses', '$maxUses'] } },
+              { $inc: { currentUses: 1 } }
+            );
           }
+        } catch (enrollError: any) {
+          console.error('[Webhook] Enrollment creation failed:', enrollError.message);
         }
       }
     } else if (status === 'FAILED') {
