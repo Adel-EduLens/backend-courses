@@ -11,6 +11,8 @@ import Admin from '../modules/admin/admin.model.js';
 import { Course } from '../modules/course/course.model.js';
 import { Round } from '../modules/course/round.model.js';
 import Event from '../modules/event/event.model.js';
+import { Initiative } from '../modules/initiative/initiative.model.js';
+import { InitiativeCourse } from '../modules/initiative/initiative_course.model.js';
 
 const now = new Date();
 
@@ -197,7 +199,32 @@ const seedDatabase = async () => {
     }
     console.log('✅ Sample upcoming and past events seeded.');
 
-    // 5. Close connection
+    // 5. Seed Initiatives
+    const iCourse = await InitiativeCourse.findOneAndUpdate(
+      { title: 'Modern School Leadership' },
+      {
+        title: 'Modern School Leadership',
+        description: 'Empowering school leaders with digital transformation tools.',
+        img: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&q=80&w=1400',
+      },
+      { upsert: true, returnDocument: 'after' }
+    );
+
+    await Initiative.findOneAndUpdate(
+      { title: 'Digital Transformation 2026' },
+      {
+        title: 'Digital Transformation 2026',
+        description: 'Comprehensive program designed to transform educational institutions through AI and modern management.',
+        img: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&q=80&w=1400',
+        tracks: [iCourse._id],
+        startDate: new Date('2026-09-01'),
+        endDate: new Date('2027-06-30'),
+      },
+      { upsert: true }
+    );
+    console.log('✅ Sample initiative seeded.');
+
+    // 6. Close connection
     await mongoose.connection.close();
 
     console.log('👋 Seeding process finished, connection closed.');

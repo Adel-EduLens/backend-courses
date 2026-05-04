@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IInitiativePackage {
+  _id: mongoose.Types.ObjectId;
   title: string;
   description?: string;
   type: 'custom' | 'full';
@@ -101,6 +102,31 @@ const initiativeSchema = new Schema<IInitiative>({
   }
 }, {
   timestamps: true
+});
+
+initiativeSchema.pre('save', async function() {
+  const initiative = this as IInitiative;
+  
+  // 1. Collect all valid track IDs belonging to this initiative
+  const validTrackIds = new Set(initiative.tracks.map(id => id.toString()));
+
+  // 2. Iterate through each package to clean up its course references
+  initiative.packages.forEach(pkg => {
+    // Only keep courses that are still present in the tracks list
+    pkg.courses = pkg.courses.filter(courseId => 
+      validTrackIds.has(courseId.toString())
+    );
+
+    // 3. Sync "full" packages to always include all tracks
+    if (pkg.type === 'full') {
+      pkg.courses = [...initiative.tracks];
+    }
+    
+    // 4. Integrity check for custom packages: maxCourses cannot exceed included tracks
+    if (pkg.type === 'custom' && pkg.maxCourses && pkg.maxCourses > pkg.courses.length) {
+      pkg.maxCourses = pkg.courses.length;
+    }
+  });
 });
 
 export const Initiative = mongoose.model<IInitiative>('Initiative', initiativeSchema);

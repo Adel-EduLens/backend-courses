@@ -572,6 +572,7 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
       initiativeId,
       enrollmentTarget,
       packageId,
+      trackId,
       selectedCourseIds = [],
       fullName,
       email,
@@ -608,13 +609,13 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
     let packageIdentifier: string | undefined;
 
     if (enrollmentTarget === 'track') {
-      const initiativeTracks = initiative.tracks as any[];
-      if (!initiativeTracks || initiativeTracks.length === 0) {
-        return res.status(400).json({ success: false, message: 'This initiative does not have any tracks configured yet.' });
+      const isValidTrack = initiative.tracks.some(t => t._id.toString() === trackId);
+      if (!isValidTrack) {
+        return res.status(400).json({ success: false, message: 'Track not found in this initiative.' });
       }
 
       amount = 0;
-      selectedCourses = initiativeTracks.map((t: any) => t._id.toString());
+      selectedCourses = [trackId];
     } else {
       const initiativePackage = initiative.packages.find(
         (item: any) => item._id?.toString() === packageId
@@ -759,7 +760,7 @@ export const getInitiativeCourseEnrollments = async (req: Request, res: Response
         { tracks: courseId },
         { 'packages.courses': courseId }
       ]
-    });
+    } as any);
 
     if (!initiative) {
       return res.status(404).json({
@@ -795,7 +796,7 @@ export const getInitiativeCourseEnrollments = async (req: Request, res: Response
           selectedCourses: courseId 
         }
       ]
-    }).sort({ createdAt: -1 });
+    } as any).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -820,7 +821,7 @@ export const getInitiativePackageEnrollments = async (req: Request, res: Respons
       referenceModel: 'Initiative',
       enrollmentTarget: 'package',
       initiativePackageId: packageId
-    }).sort({ createdAt: -1 });
+    } as any).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
