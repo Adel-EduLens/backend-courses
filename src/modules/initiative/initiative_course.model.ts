@@ -12,7 +12,6 @@ export interface IInitiativeCourse extends Document {
   title: string;
   description: string;
   img: string;
-  brief: string;
   price: number;
   lectures: Types.DocumentArray<IInitiativeLecture>;
   createdAt: Date;
@@ -57,11 +56,7 @@ const initiativeCourseSchema = new Schema<IInitiativeCourse>({
     type: String,
     required: true
   },
-  brief: {
-    type: String,
-    required: true,
-    trim: true
-  },
+
   price: {
     type: Number,
     required: true,

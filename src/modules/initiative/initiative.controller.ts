@@ -16,15 +16,17 @@ type InitiativeCoursePayload = {
   title: string;
   description: string;
   img: string;
-  brief: string;
 };
 
 type InitiativePackagePayload = {
+  _id?: string;
   title: string;
   description?: string;
   type: 'custom' | 'full';
   price: number;
+  isRecommended?: boolean;
   maxCourses?: number;
+  features?: string[];
   courses: InitiativeCoursePayload[];
 };
 
@@ -46,7 +48,6 @@ async function upsertInitiativeCourse(coursePayload: InitiativeCoursePayload) {
         title: coursePayload.title,
         description: coursePayload.description,
         img: coursePayload.img,
-        brief: coursePayload.brief
       },
       {
         returnDocument: 'after',
@@ -63,7 +64,6 @@ async function upsertInitiativeCourse(coursePayload: InitiativeCoursePayload) {
     title: coursePayload.title,
     description: coursePayload.description,
     img: coursePayload.img,
-    brief: coursePayload.brief
   });
 
   return createdCourse._id;
@@ -97,11 +97,14 @@ async function buildInitiativeReferences(
     }
 
     packages.push({
+      ...(packagePayload._id ? { _id: packagePayload._id } : {}),
       title: packagePayload.title,
       description: packagePayload.description ?? '',
       type: packagePayload.type,
       price: packagePayload.price,
+      isRecommended: packagePayload.isRecommended ?? false,
       ...(packagePayload.type === 'custom' ? { maxCourses: packagePayload.maxCourses } : {}),
+      features: packagePayload.features ?? [],
       courses: courseIds
     });
   }
@@ -533,7 +536,9 @@ export const deleteInitiative = async (req: Request, res: Response, next: NextFu
     }
 
     const courseIds = new Set<string>();
-    courseIds.add(initiative.track.toString());
+    for (const trackId of initiative.tracks ?? []) {
+      courseIds.add(trackId.toString());
+    }
 
     for (const packageItem of initiative.packages ?? []) {
       for (const courseId of packageItem.courses ?? []) {
@@ -603,13 +608,13 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
     let packageIdentifier: string | undefined;
 
     if (enrollmentTarget === 'track') {
-      const track = initiative.track as any;
-      if (!track) {
-        return res.status(400).json({ success: false, message: 'This initiative does not have a track configured yet.' });
+      const initiativeTracks = initiative.tracks as any[];
+      if (!initiativeTracks || initiativeTracks.length === 0) {
+        return res.status(400).json({ success: false, message: 'This initiative does not have any tracks configured yet.' });
       }
 
       amount = 0;
-      selectedCourses = [track._id.toString()];
+      selectedCourses = initiativeTracks.map((t: any) => t._id.toString());
     } else {
       const initiativePackage = initiative.packages.find(
         (item: any) => item._id?.toString() === packageId

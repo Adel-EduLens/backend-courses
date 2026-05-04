@@ -1,7 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { promisify } from 'util';
 import Admin from '../modules/admin/admin.model.js';
+import { Student } from '../modules/student/student.model.js';
 import AppError from '../utils/AppError.util.js';
 
 export const protect = async (req: Request, res: Response, next: NextFunction) => {
@@ -24,9 +24,15 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     // 2) Verification token
     const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as any;
 
-    // 3) Check if user still exists
-    const currentAdmin = await Admin.findById(decoded.id);
-    if (!currentAdmin) {
+    // 3) Check if user still exists (use role to determine model)
+    let currentUser;
+    if (decoded.role === 'student') {
+      currentUser = await Student.findById(decoded.id);
+    } else {
+      currentUser = await Admin.findById(decoded.id);
+    }
+
+    if (!currentUser) {
       return next(
         new AppError(
           'The user belonging to this token does no longer exist.',
@@ -36,7 +42,7 @@ export const protect = async (req: Request, res: Response, next: NextFunction) =
     }
 
     // GRANT ACCESS TO PROTECTED ROUTE
-    (req as any).user = currentAdmin;
+    (req as any).user = currentUser;
     next();
   } catch (error) {
     if (error instanceof jwt.JsonWebTokenError) {

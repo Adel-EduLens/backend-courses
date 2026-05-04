@@ -5,7 +5,9 @@ export interface IInitiativePackage {
   description?: string;
   type: 'custom' | 'full';
   price: number;
+  isRecommended: boolean;
   maxCourses?: number;
+  features: string[];
   courses: mongoose.Types.ObjectId[];
 }
 
@@ -42,12 +44,20 @@ const initiativePackageSchema = new Schema<IInitiativePackage>({
     min: 0,
     default: 0
   },
+  isRecommended: {
+    type: Boolean,
+    default: false
+  },
   maxCourses: {
     type: Number,
     min: 1,
     required: function (this: IInitiativePackage) {
       return this.type === 'custom';
     }
+  },
+  features: {
+    type: [String],
+    default: []
   },
   courses: [{
     type: Schema.Types.ObjectId,
