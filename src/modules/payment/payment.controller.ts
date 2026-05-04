@@ -106,12 +106,15 @@ export const handleKashierWebhook = async (req: Request, res: Response, next: Ne
         const additionalInfo = payment.paymentDetails?.additionalInfo;
 
         try {
-          const enrollmentFilter = {
+          const enrollmentFilter: Record<string, unknown> = {
             referenceId: payment.referenceId,
             phone,
-            enrollmentTarget: payment.paymentDetails?.enrollmentTarget,
-            initiativePackageId: payment.paymentDetails?.initiativePackageId
           };
+
+          if (payment.referenceModel === 'Initiative') {
+            enrollmentFilter.enrollmentTarget = payment.paymentDetails?.enrollmentTarget;
+            enrollmentFilter.initiativePackageId = payment.paymentDetails?.initiativePackageId;
+          }
 
           const enrollmentUpdate = {
             $set: {
