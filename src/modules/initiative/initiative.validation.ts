@@ -108,16 +108,6 @@ export const enrollInitiativeSchema = Joi.object({
     then: Joi.array().items(objectIdSchema).default([]),
     otherwise: Joi.forbidden()
   }),
-  fullName: Joi.string().required().messages({
-    'string.empty': 'Full name is required'
-  }),
-  email: Joi.string().email().required().messages({
-    'string.email': 'Please provide a valid email address',
-    'string.empty': 'Email is required'
-  }),
-  phone: Joi.string().required().messages({
-    'string.empty': 'Phone number is required'
-  }),
   additionalInfo: Joi.string().allow('', null),
   promoCode: Joi.string().allow('', null)
 });

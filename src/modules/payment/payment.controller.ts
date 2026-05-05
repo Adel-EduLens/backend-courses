@@ -103,12 +103,13 @@ export const handleKashierWebhook = async (req: Request, res: Response, next: Ne
         const name = payment.customer?.name ?? '';
         const email = payment.customer?.email ?? '';
         const phone = payment.customer?.phone ?? '';
+        const studentId = payment.paymentDetails?.studentId;
         const additionalInfo = payment.paymentDetails?.additionalInfo;
 
         try {
           const enrollmentFilter: Record<string, unknown> = {
             referenceId: payment.referenceId,
-            phone,
+            studentId,
           };
 
           if (payment.referenceModel === 'Initiative') {
@@ -120,8 +121,10 @@ export const handleKashierWebhook = async (req: Request, res: Response, next: Ne
             $set: {
               referenceModel: payment.referenceModel,
               selectedCourses: payment.paymentDetails?.selectedCourses,
+              studentId,
               fullName: name,
               email,
+              phone,
               additionalInfo,
               paymentOrderId: merchantOrderId,
               promoCode: payment.paymentDetails?.promoCode

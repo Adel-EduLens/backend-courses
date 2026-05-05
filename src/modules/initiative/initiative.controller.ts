@@ -81,12 +81,18 @@ async function buildInitiativeReferences(
   } | null
 ) {
   const retainedCourseIds = new Set<string>();
+  const trackIdByPayloadId = new Map<string, string>();
+  const trackIdByTitle = new Map<string, string>();
   const tracksIds = [];
 
   for (const trackPayload of payload.tracks ?? []) {
     const trackId = (await upsertInitiativeCourse(trackPayload)).toString();
     retainedCourseIds.add(trackId);
     tracksIds.push(trackId);
+    if (trackPayload._id) {
+      trackIdByPayloadId.set(trackPayload._id.toString(), trackId);
+    }
+    trackIdByTitle.set(trackPayload.title, trackId);
   }
 
   const packages = [];
@@ -95,6 +101,16 @@ async function buildInitiativeReferences(
     const courseIds: string[] = [];
 
     for (const coursePayload of packagePayload.courses ?? []) {
+      const existingTrackId =
+        (coursePayload._id ? trackIdByPayloadId.get(coursePayload._id.toString()) : undefined) ??
+        trackIdByTitle.get(coursePayload.title);
+
+      if (existingTrackId) {
+        retainedCourseIds.add(existingTrackId);
+        courseIds.push(existingTrackId);
+        continue;
+      }
+
       const courseId = (await upsertInitiativeCourse(coursePayload)).toString();
       retainedCourseIds.add(courseId);
       courseIds.push(courseId);
@@ -568,7 +584,7 @@ export const deleteInitiative = async (req: Request, res: Response, next: NextFu
 /**
  * @desc    Enroll in an initiative track or package — initiates Kashier payment
  * @route   POST /api/initiatives/enroll
- * @access  Public
+ * @access  Private/Student
  */
 export const enrollInInitiative = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -578,12 +594,17 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
       packageId,
       trackId,
       selectedCourseIds = [],
-      fullName,
-      email,
-      phone,
       additionalInfo,
       promoCode: promoCodeInput
     } = req.body;
+    const { _id: studentId, name: fullName, email, phone } = (req as any).user;
+
+    if (!studentId || !fullName || !email || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Your student profile is missing required contact information. Please update your account before enrolling.'
+      });
+    }
 
     const initiative = await Initiative.findById(initiativeId).populate(initiativePopulate);
     if (!initiative) {
@@ -593,7 +614,7 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
     const duplicateQuery: Record<string, unknown> = {
       referenceId: initiativeId,
       referenceModel: 'Initiative',
-      phone,
+      studentId,
       enrollmentTarget
     };
 
@@ -607,7 +628,7 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
     if (existing) {
       return res.status(400).json({
         success: false,
-        message: 'You have already enrolled in this initiative selection with this phone number.'
+        message: 'You have already enrolled in this initiative selection.'
       });
     }
 
@@ -712,6 +733,7 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
       const enrollmentData: Record<string, unknown> = {
         referenceId: initiativeId,
         referenceModel: 'Initiative',
+        studentId,
         enrollmentTarget,
         selectedCourses,
         fullName,
@@ -760,6 +782,7 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
       customer: { name: fullName, email, phone },
       paymentDetails: {
         additionalInfo,
+        studentId,
         enrollmentTarget,
         initiativePackageId: packageIdentifier || (enrollmentTarget === 'track' ? trackId : undefined),
         selectedCourses,
@@ -787,7 +810,7 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
     if ((error as any).code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'You have already enrolled in this initiative selection with this phone number.'
+        message: 'You have already enrolled in this initiative selection.'
       });
     }
     next(error);

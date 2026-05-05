@@ -5,6 +5,11 @@ export const registerSchema = Joi.object({
     'string.empty': 'Name is required',
     'any.required': 'Name is required'
   }),
+  email: Joi.string().email().required().messages({
+    'string.email': 'Please provide a valid email address',
+    'string.empty': 'Email is required',
+    'any.required': 'Email is required'
+  }),
   phone: Joi.string().required().messages({
     'string.empty': 'Phone number is required',
     'any.required': 'Phone number is required'

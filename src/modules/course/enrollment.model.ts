@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IEnrollment extends Document {
-  studentId?: mongoose.Types.ObjectId;
+  studentId: mongoose.Types.ObjectId;
   referenceId: mongoose.Types.ObjectId;
   referenceModel: 'Round' | 'InitiativeCourse' | 'Initiative';
   enrollmentTarget?: 'track' | 'package';
@@ -20,7 +20,8 @@ export interface IEnrollment extends Document {
 const enrollmentSchema = new Schema<IEnrollment>({
   studentId: {
     type: Schema.Types.ObjectId,
-    ref: 'Student'
+    ref: 'Student',
+    required: true
   },
   referenceId: {
     type: Schema.Types.ObjectId,
@@ -74,23 +75,8 @@ const enrollmentSchema = new Schema<IEnrollment>({
   timestamps: true
 });
 
-enrollmentSchema.pre('save', async function() {
-  if (!this.studentId && this.phone) {
-    try {
-      // Use mongoose.model to avoid potential circular dependency issues at runtime
-      const StudentModel = mongoose.model('Student');
-      const student = await StudentModel.findOne({ phone: this.phone });
-      if (student) {
-        this.studentId = student._id as mongoose.Types.ObjectId;
-      }
-    } catch (err) {
-      console.error('Error in Enrollment pre-save hook:', err);
-    }
-  }
-});
-
 enrollmentSchema.index(
-  { referenceId: 1, phone: 1, enrollmentTarget: 1, initiativePackageId: 1 },
+  { referenceId: 1, studentId: 1, enrollmentTarget: 1, initiativePackageId: 1 },
   { unique: true }
 );
 

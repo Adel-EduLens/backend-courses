@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 
 export interface IStudent extends Document {
   name: string;
+  email: string;
   phone: string;
   password: string;
   otpCode?: string | undefined;
@@ -18,6 +19,12 @@ const studentSchema = new Schema<IStudent>({
   name: {
     type: String,
     required: true,
+    trim: true
+  },
+  email: {
+    type: String,
+    required: true,
+    lowercase: true,
     trim: true
   },
   phone: {

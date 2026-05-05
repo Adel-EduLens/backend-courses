@@ -74,11 +74,19 @@ export const getCourse = async (req: Request, res: Response, next: NextFunction)
 /**
  * @desc    Enroll in a round — initiates Kashier payment if round has a price
  * @route   POST /api/courses/enroll
- * @access  Public
+ * @access  Private/Student
  */
 export const enrollInRound = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { roundId, fullName, email, phone, additionalInfo, promoCode: promoCodeInput } = req.body;
+    const { roundId, additionalInfo, promoCode: promoCodeInput } = req.body;
+    const { _id: studentId, name: fullName, email, phone } = (req as any).user;
+
+    if (!studentId || !fullName || !email || !phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'Your student profile is missing required contact information. Please update your account before enrolling.'
+      });
+    }
 
     const round = await Round.findById(roundId).populate('course');
     if (!round) {
@@ -90,11 +98,11 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
     }
 
     // Prevent duplicate enrollment before hitting payment
-    const existing = await Enrollment.findOne({ referenceId: roundId, referenceModel: 'Round', phone });
+    const existing = await Enrollment.findOne({ referenceId: roundId, referenceModel: 'Round', studentId });
     if (existing) {
       return res.status(400).json({
         success: false,
-        message: 'You have already enrolled in this round with this phone number.'
+        message: 'You have already enrolled in this round.'
       });
     }
 
@@ -140,6 +148,7 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
         );
       }
       const enrollment = await Enrollment.create({
+        studentId,
         referenceId: roundId, referenceModel: 'Round', fullName, email, phone, additionalInfo,
         ...(appliedPromoCode ? { promoCode: appliedPromoCode } : {})
       });
@@ -166,7 +175,7 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
       amount: price,
       status: 'pending',
       customer: { name: fullName, email, phone },
-      paymentDetails: { additionalInfo, promoCode: appliedPromoCode }
+      paymentDetails: { studentId, additionalInfo, promoCode: appliedPromoCode }
     });
 
     const sessionResponse = await createPaymentSession({
@@ -189,7 +198,7 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'You have already enrolled in this round with this phone number.'
+        message: 'You have already enrolled in this round.'
       });
     }
     next(error);

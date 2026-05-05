@@ -35,6 +35,7 @@ const verifyOtp = (student: any, otpCode: string) => {
 const buildStudentResponse = (student: any) => ({
   id: student._id,
   name: student.name,
+  email: student.email,
   phone: student.phone,
   role: student.role
 });
@@ -90,16 +91,17 @@ export const enrichEnrollment = async (enrollment: any) => {
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, phone, password } = req.body;
+    const { name, email, phone, password } = req.body;
 
     const existing = await Student.findOne({ phone });
     if (existing?.isVerified) {
-      return next(new AppError('This phone number is already registered. Please login instead.', 400));
+      return next(new AppError('A user with this phone number already exists', 400));
     }
 
-    const student = existing || new Student({ name, phone, password });
+    const student = existing || new Student({ name, email, phone, password });
     if (existing) {
       student.name = name;
+      student.email = email;
       student.password = password;
     }
 
@@ -132,7 +134,13 @@ export const verifyRegisterOtp = async (req: Request, res: Response, next: NextF
 
     // Link existing enrollments with this phone number to the student
     await Enrollment.updateMany(
-      { phone, studentId: { $exists: false } },
+      {
+        phone,
+        $or: [
+          { studentId: { $exists: false } },
+          { studentId: null }
+        ]
+      },
       { studentId: student._id }
     );
 
@@ -215,9 +223,9 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
 
 export const getMyEnrollments = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const phone = (req as any).user.phone;
+    const studentId = (req as any).user._id;
 
-    const enrollments = await Enrollment.find({ phone })
+    const enrollments = await Enrollment.find({ studentId })
       .populate('referenceId')
       .sort({ createdAt: -1 });
 
