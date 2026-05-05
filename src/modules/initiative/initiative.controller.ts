@@ -439,10 +439,16 @@ export const notifyInitiativeLectureStudents = async (req: Request, res: Respons
  */
 export const getInitiatives = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const hasPagination = Boolean(req.query.page || req.query.limit);
+    const { search } = req.query;
+    const hasPagination = Boolean(req.query.page || req.query.limit || search);
+    const filter: Record<string, unknown> = {};
+
+    if (search) {
+      filter.title = { $regex: search, $options: 'i' };
+    }
 
     if (!hasPagination) {
-      const initiatives = await Initiative.find().populate(initiativePopulate);
+      const initiatives = await Initiative.find(filter).populate(initiativePopulate);
       return res.status(200).json({
         success: true,
         data: initiatives
@@ -451,6 +457,7 @@ export const getInitiatives = async (req: Request, res: Response, next: NextFunc
 
     const { items: initiatives, pagination } = await paginateModel(Initiative, {
       query: req.query as Record<string, unknown>,
+      filter,
       populate: initiativePopulate,
       defaultLimit: 10,
     });

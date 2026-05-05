@@ -39,10 +39,16 @@ const buildLectureNotificationMessage = (
  */
 export const getCourses = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const hasPagination = Boolean(req.query.page || req.query.limit);
+    const { search } = req.query;
+    const hasPagination = Boolean(req.query.page || req.query.limit || search);
+    const filter: Record<string, unknown> = {};
+
+    if (search) {
+      filter.title = { $regex: search, $options: 'i' };
+    }
 
     if (!hasPagination) {
-      const courses = await Course.find().populate({ path: 'rounds', populate: { path: 'lectures' } });
+      const courses = await Course.find(filter).populate({ path: 'rounds', populate: { path: 'lectures' } });
       return res.status(200).json({
         success: true,
         data: courses
@@ -51,6 +57,7 @@ export const getCourses = async (req: Request, res: Response, next: NextFunction
 
     const { items: courses, pagination } = await paginateModel(Course, {
       query: req.query as Record<string, unknown>,
+      filter,
       populate: { path: 'rounds', populate: { path: 'lectures' } },
       defaultLimit: 10,
     });
@@ -557,7 +564,10 @@ export const getEnrollments = async (req: Request, res: Response, next: NextFunc
     );
 
     if (!hasPaginationOrFilters) {
-      const enrollments = await Enrollment.find().populate('referenceId', 'title').lean();
+      const enrollments = await Enrollment.find()
+        .populate('referenceId', 'title')
+        .populate('selectedCourses', 'title')
+        .lean();
       const paymentOrderIds = enrollments
         .map((enrollment: any) => enrollment.paymentOrderId)
         .filter(Boolean);
@@ -613,7 +623,7 @@ export const getEnrollments = async (req: Request, res: Response, next: NextFunc
     const { items: enrollmentsWithPayments, pagination } = await paginateModel(Enrollment, {
       query: req.query as Record<string, unknown>,
       filter: query,
-      populate: 'referenceId',
+      populate: ['referenceId', { path: 'selectedCourses', select: 'title' }],
       sort: { createdAt: -1 },
       lean: true,
       defaultLimit: 10,

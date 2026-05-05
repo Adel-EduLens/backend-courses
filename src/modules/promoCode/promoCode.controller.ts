@@ -147,10 +147,17 @@ function formatUsedOnLabel(
 
 export const getPromoCodes = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const hasPagination = Boolean(req.query.page || req.query.limit);
+    const { search } = req.query;
+    const hasPagination = Boolean(req.query.page || req.query.limit || search);
+    const filter: Record<string, unknown> = {};
+
+    if (search) {
+      filter.code = { $regex: search, $options: 'i' };
+    }
 
     if (!hasPagination) {
       const promoCodes = await PromoCode.find()
+        .find(filter)
         .populate('applicableTo.courses', 'title')
         .populate('applicableTo.initiativePackages.initiativeId', 'title')
         .sort({ createdAt: -1 });
@@ -160,6 +167,7 @@ export const getPromoCodes = async (req: Request, res: Response, next: NextFunct
 
     const { items: promoCodes, pagination } = await paginateModel(PromoCode, {
       query: req.query as Record<string, unknown>,
+      filter,
       populate: [
         { path: 'applicableTo.courses', select: 'title' },
         { path: 'applicableTo.initiativePackages.initiativeId', select: 'title' }

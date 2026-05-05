@@ -60,14 +60,18 @@ export const getStudentDetails = async (req: Request, res: Response, next: NextF
         { phone: student.phone }
       ]
     })
-    .populate({
-      path: 'referenceId',
-      populate: {
-        path: 'course',
-        select: 'title brief img'
-      }
-    })
+    .populate('referenceId')
+    .populate('selectedCourses', 'title')
     .sort({ createdAt: -1 });
+
+    for (const enrollment of enrollments) {
+      if (enrollment.referenceModel === 'Round' && enrollment.referenceId) {
+        await (enrollment.referenceId as any).populate({
+          path: 'course',
+          select: 'title brief img'
+        });
+      }
+    }
 
     const paymentOrderIds = enrollments
       .map((e: any) => e.paymentOrderId)

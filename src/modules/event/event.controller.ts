@@ -41,10 +41,16 @@ const deleteGalleryImages = async (gallery: string[]) => {
  */
 export const getEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const hasPagination = Boolean(req.query.page || req.query.limit);
+    const { search } = req.query;
+    const hasPagination = Boolean(req.query.page || req.query.limit || search);
+    const filter: Record<string, unknown> = {};
+
+    if (search) {
+      filter.title = { $regex: search, $options: 'i' };
+    }
 
     if (!hasPagination) {
-      const events = await Event.find().sort({ date: -1 });
+      const events = await Event.find(filter).sort({ date: -1 });
       return res.status(200).json({
         success: true,
         data: events
@@ -53,6 +59,7 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
 
     const { items: events, pagination } = await paginateModel(Event, {
       query: req.query as Record<string, unknown>,
+      filter,
       sort: { date: -1 },
       defaultLimit: 10,
     });
