@@ -209,6 +209,76 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
   }
 };
 
+export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { phone } = req.body;
+
+    const student = await Student.findOne({ phone });
+    if (!student) {
+      return next(new AppError('No account found with this phone number', 404));
+    }
+
+    if (!student.isVerified) {
+      return next(new AppError('This account is not verified yet. Please complete registration first.', 400));
+    }
+
+    await saveAndSendOtp(student, phone);
+
+    successResponse(res, {
+      message: 'Verification code sent to your WhatsApp'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resendForgotPasswordOtp = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { phone } = req.body;
+
+    const student = await Student.findOne({ phone });
+    if (!student) {
+      return next(new AppError('No account found with this phone number', 404));
+    }
+
+    if (!student.isVerified) {
+      return next(new AppError('This account is not verified yet. Please complete registration first.', 400));
+    }
+
+    await saveAndSendOtp(student, phone);
+
+    successResponse(res, {
+      message: 'A new verification code was sent to your WhatsApp'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { phone, otpCode, password } = req.body;
+
+    const student = await Student.findOne({ phone, isVerified: true }).select('+otpCode +otpExpiresAt +password');
+    if (!student) {
+      return next(new AppError('No account found with this phone number', 404));
+    }
+
+    verifyOtp(student, otpCode);
+
+    student.password = password;
+    student.otpCode = undefined;
+    student.otpExpiresAt = undefined;
+    await student.save();
+
+    successResponse(res, {
+      message: 'Password reset successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const getMe = async (req: Request, res: Response, next: NextFunction) => {
   try {
     successResponse(res, {

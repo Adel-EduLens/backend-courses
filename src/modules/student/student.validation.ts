@@ -50,3 +50,20 @@ export const loginSchema = Joi.object({
     'any.required': 'Password is required'
   })
 });
+
+export const resetPasswordSchema = Joi.object({
+  phone: Joi.string().required().messages({
+    'string.empty': 'Phone number is required',
+    'any.required': 'Phone number is required'
+  }),
+  otpCode: Joi.string().length(6).required().messages({
+    'string.length': 'OTP must be 6 digits',
+    'string.empty': 'OTP code is required',
+    'any.required': 'OTP code is required'
+  }),
+  password: Joi.string().min(6).required().messages({
+    'string.empty': 'Password is required',
+    'string.min': 'Password must be at least 6 characters',
+    'any.required': 'Password is required'
+  })
+});
