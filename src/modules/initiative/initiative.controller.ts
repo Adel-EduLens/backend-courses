@@ -6,6 +6,7 @@ import { Payment } from '../payment/payment.model.js';
 import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
 import { sendBulkMessage } from '../../utils/wapilot.service.js';
 import { PromoCode } from '../promoCode/promoCode.model.js';
+import { paginateModel } from '../../utils/pagination.util.js';
 
 const initiativePopulate = [
   { path: 'tracks' },
@@ -438,10 +439,28 @@ export const notifyInitiativeLectureStudents = async (req: Request, res: Respons
  */
 export const getInitiatives = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const initiatives = await Initiative.find().populate(initiativePopulate);
+    const hasPagination = Boolean(req.query.page || req.query.limit);
+
+    if (!hasPagination) {
+      const initiatives = await Initiative.find().populate(initiativePopulate);
+      return res.status(200).json({
+        success: true,
+        data: initiatives
+      });
+    }
+
+    const { items: initiatives, pagination } = await paginateModel(Initiative, {
+      query: req.query as Record<string, unknown>,
+      populate: initiativePopulate,
+      defaultLimit: 10,
+    });
+
     res.status(200).json({
       success: true,
-      data: initiatives
+      data: {
+        initiatives,
+        pagination
+      }
     });
   } catch (error) {
     next(error);

@@ -5,6 +5,7 @@ import { Lecture } from './lecture.model.js';
 import Enrollment from './enrollment.model.js';
 import { Payment } from '../payment/payment.model.js';
 import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
+import { paginateModel } from '../../utils/pagination.util.js';
 import { PromoCode } from '../promoCode/promoCode.model.js';
 import { sendBulkMessage } from '../../utils/wapilot.service.js';
 
@@ -38,10 +39,28 @@ const buildLectureNotificationMessage = (
  */
 export const getCourses = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const courses = await Course.find().populate({ path: 'rounds', populate: { path: 'lectures' } });
+    const hasPagination = Boolean(req.query.page || req.query.limit);
+
+    if (!hasPagination) {
+      const courses = await Course.find().populate({ path: 'rounds', populate: { path: 'lectures' } });
+      return res.status(200).json({
+        success: true,
+        data: courses
+      });
+    }
+
+    const { items: courses, pagination } = await paginateModel(Course, {
+      query: req.query as Record<string, unknown>,
+      populate: { path: 'rounds', populate: { path: 'lectures' } },
+      defaultLimit: 10,
+    });
+
     res.status(200).json({
       success: true,
-      data: courses
+      data: {
+        courses,
+        pagination
+      }
     });
   } catch (error) {
     next(error);
@@ -526,27 +545,107 @@ export const deleteLecture = async (req: Request, res: Response, next: NextFunct
  */
 export const getEnrollments = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const enrollments = await Enrollment.find().populate('referenceId', 'title').lean();
-    const paymentOrderIds = enrollments
-      .map((enrollment: any) => enrollment.paymentOrderId)
-      .filter(Boolean);
-
-    const payments = paymentOrderIds.length > 0
-      ? await Payment.find({ orderId: { $in: paymentOrderIds } })
-          .select('orderId amount status transactionId paymentDetails customer createdAt updatedAt')
-          .lean()
-      : [];
-
-    const paymentByOrderId = new Map(
-      payments.map((payment: any) => [payment.orderId, payment])
+    const { search, courseId, roundId, dateFrom, dateTo } = req.query;
+    const hasPaginationOrFilters = Boolean(
+      req.query.page ||
+      req.query.limit ||
+      search ||
+      courseId ||
+      roundId ||
+      dateFrom ||
+      dateTo
     );
 
-    const enrollmentsWithPayments = enrollments.map((enrollment: any) => ({
-      ...enrollment,
-      payment: enrollment.paymentOrderId ? paymentByOrderId.get(enrollment.paymentOrderId) ?? null : null
-    }));
+    if (!hasPaginationOrFilters) {
+      const enrollments = await Enrollment.find().populate('referenceId', 'title').lean();
+      const paymentOrderIds = enrollments
+        .map((enrollment: any) => enrollment.paymentOrderId)
+        .filter(Boolean);
 
-    res.status(200).json({ success: true, data: enrollmentsWithPayments });
+      const payments = paymentOrderIds.length > 0
+        ? await Payment.find({ orderId: { $in: paymentOrderIds } })
+            .select('orderId amount status transactionId paymentDetails customer createdAt updatedAt')
+            .lean()
+        : [];
+
+      const paymentByOrderId = new Map(
+        payments.map((payment: any) => [payment.orderId, payment])
+      );
+
+      const enrollmentsWithPayments = enrollments.map((enrollment: any) => ({
+        ...enrollment,
+        payment: enrollment.paymentOrderId ? paymentByOrderId.get(enrollment.paymentOrderId) ?? null : null
+      }));
+
+      return res.status(200).json({ success: true, data: enrollmentsWithPayments });
+    }
+
+    const query: any = {};
+
+    if (search) {
+      query.$or = [
+        { fullName: { $regex: search, $options: 'i' } },
+        { phone: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (roundId && roundId !== 'all') {
+      query.referenceModel = 'Round';
+      query.referenceId = roundId;
+    } else if (courseId && courseId !== 'all') {
+      const rounds = await Round.find({ course: courseId }).select('_id').lean();
+      query.referenceModel = 'Round';
+      query.referenceId = { $in: rounds.map((round) => round._id) };
+    }
+
+    if (dateFrom || dateTo) {
+      query.createdAt = {};
+
+      if (dateFrom) {
+        query.createdAt.$gte = new Date(`${dateFrom}T00:00:00`);
+      }
+
+      if (dateTo) {
+        query.createdAt.$lte = new Date(`${dateTo}T23:59:59.999`);
+      }
+    }
+
+    const { items: enrollmentsWithPayments, pagination } = await paginateModel(Enrollment, {
+      query: req.query as Record<string, unknown>,
+      filter: query,
+      populate: 'referenceId',
+      sort: { createdAt: -1 },
+      lean: true,
+      defaultLimit: 10,
+      transform: async (enrollments: any[]) => {
+        const paymentOrderIds = enrollments
+          .map((enrollment) => enrollment.paymentOrderId)
+          .filter(Boolean);
+
+        const payments = paymentOrderIds.length > 0
+          ? await Payment.find({ orderId: { $in: paymentOrderIds } })
+              .select('orderId amount status transactionId paymentDetails customer createdAt updatedAt')
+              .lean()
+          : [];
+
+        const paymentByOrderId = new Map(
+          payments.map((payment: any) => [payment.orderId, payment])
+        );
+
+        return enrollments.map((enrollment) => ({
+          ...enrollment,
+          payment: enrollment.paymentOrderId ? paymentByOrderId.get(enrollment.paymentOrderId) ?? null : null
+        }));
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        enrollments: enrollmentsWithPayments,
+        pagination
+      }
+    });
   } catch (error) {
     next(error);
   }

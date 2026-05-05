@@ -7,6 +7,7 @@ import { Round } from '../course/round.model.js';
 import { Course } from '../course/course.model.js';
 import { Initiative } from '../initiative/initiative.model.js';
 import { InitiativeCourse } from '../initiative/initiative_course.model.js';
+import { paginateModel } from '../../utils/pagination.util.js';
 
 type PromoUsageRecord = {
   _id: unknown;
@@ -146,12 +147,28 @@ function formatUsedOnLabel(
 
 export const getPromoCodes = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const promoCodes = await PromoCode.find()
-      .populate('applicableTo.courses', 'title')
-      .populate('applicableTo.initiativePackages.initiativeId', 'title')
-      .sort({ createdAt: -1 });
+    const hasPagination = Boolean(req.query.page || req.query.limit);
 
-    successResponse(res, { data: { promoCodes } });
+    if (!hasPagination) {
+      const promoCodes = await PromoCode.find()
+        .populate('applicableTo.courses', 'title')
+        .populate('applicableTo.initiativePackages.initiativeId', 'title')
+        .sort({ createdAt: -1 });
+
+      return successResponse(res, { data: { promoCodes } });
+    }
+
+    const { items: promoCodes, pagination } = await paginateModel(PromoCode, {
+      query: req.query as Record<string, unknown>,
+      populate: [
+        { path: 'applicableTo.courses', select: 'title' },
+        { path: 'applicableTo.initiativePackages.initiativeId', select: 'title' }
+      ],
+      sort: { createdAt: -1 },
+      defaultLimit: 10,
+    });
+
+    successResponse(res, { data: { promoCodes, pagination } });
   } catch (error) {
     next(error);
   }

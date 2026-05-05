@@ -2,6 +2,7 @@ import path from 'path';
 import { Request, Response, NextFunction } from 'express';
 import Event from './event.model.js';
 import { deleteFile, getRelativePathFromUrl } from '../../utils/fileSystem.util.js';
+import { paginateModel } from '../../utils/pagination.util.js';
 
 const getFileUrl = (req: Request, file: Express.Multer.File) => {
   const relativePath = path.relative(path.resolve('public'), file.path).split(path.sep).join('/');
@@ -40,10 +41,28 @@ const deleteGalleryImages = async (gallery: string[]) => {
  */
 export const getEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const events = await Event.find().sort({ date: -1 });
+    const hasPagination = Boolean(req.query.page || req.query.limit);
+
+    if (!hasPagination) {
+      const events = await Event.find().sort({ date: -1 });
+      return res.status(200).json({
+        success: true,
+        data: events
+      });
+    }
+
+    const { items: events, pagination } = await paginateModel(Event, {
+      query: req.query as Record<string, unknown>,
+      sort: { date: -1 },
+      defaultLimit: 10,
+    });
+
     res.status(200).json({
       success: true,
-      data: events
+      data: {
+        events,
+        pagination
+      }
     });
   } catch (error) {
     next(error);

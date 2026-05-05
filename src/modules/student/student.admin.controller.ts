@@ -5,6 +5,7 @@ import { Payment } from '../payment/payment.model.js';
 import { successResponse } from '../../utils/response.util.js';
 import AppError from '../../utils/AppError.util.js';
 import { enrichEnrollment } from './student.controller.js';
+import { paginateModel } from '../../utils/pagination.util.js';
 
 /**
  * @desc    Get all students with search and pagination
@@ -13,7 +14,7 @@ import { enrichEnrollment } from './student.controller.js';
  */
 export const getAllStudents = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { search, page = 1, limit = 10 } = req.query;
+    const { search } = req.query;
     const query: any = {};
 
     if (search) {
@@ -23,23 +24,17 @@ export const getAllStudents = async (req: Request, res: Response, next: NextFunc
       ];
     }
 
-    const skip = (Number(page) - 1) * Number(limit);
-    const students = await Student.find(query)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(Number(limit));
-
-    const total = await Student.countDocuments(query);
+    const { items: students, pagination } = await paginateModel(Student, {
+      query: req.query as Record<string, unknown>,
+      filter: query,
+      sort: { createdAt: -1 },
+      defaultLimit: 10,
+    });
 
     successResponse(res, {
       data: {
         students,
-        pagination: {
-          total,
-          page: Number(page),
-          limit: Number(limit),
-          pages: Math.ceil(total / Number(limit))
-        }
+        pagination
       }
     });
   } catch (error) {
