@@ -62,10 +62,22 @@ export const enrichEnrollment = async (enrollment: any) => {
   }
 
   if (plainEnrollment.referenceModel === 'Initiative') {
+    const selectedTrackTitle = Array.isArray(plainEnrollment.selectedCourses)
+      ? plainEnrollment.selectedCourses
+          .map((course: any) => (typeof course === 'string' ? undefined : course?.title))
+          .find(Boolean)
+      : undefined
+
     return {
       ...plainEnrollment,
-      displayTitle: reference.title || 'Initiative',
-      displaySubtitle: plainEnrollment.enrollmentTarget === 'package' ? 'Initiative Package' : 'Initiative Track',
+      displayTitle:
+        plainEnrollment.enrollmentTarget === 'track'
+          ? selectedTrackTitle || reference.title || 'Initiative Track'
+          : reference.title || 'Initiative',
+      displaySubtitle:
+        plainEnrollment.enrollmentTarget === 'track'
+          ? reference.title || 'Initiative'
+          : 'Initiative Package',
       displayImage: reference.img || '',
       displayDescription: reference.description || '',
       detailsPath: reference._id ? `/initiatives/${reference._id}` : null
@@ -297,6 +309,7 @@ export const getMyEnrollments = async (req: Request, res: Response, next: NextFu
 
     const enrollments = await Enrollment.find({ studentId })
       .populate('referenceId')
+      .populate('selectedCourses', 'title')
       .sort({ createdAt: -1 });
 
     // Manually populate 'course' only for Round enrollments to avoid StrictPopulateError
