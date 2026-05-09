@@ -77,7 +77,8 @@ export const createInitiativeSchema = Joi.object({
     'any.required': 'End date is required',
     'date.greater': 'End date must be after the start date',
     'date.format': 'End date must be a valid date'
-  })
+  }),
+  isAvailable: Joi.boolean().default(true)
 }).unknown(true);
 
 export const updateInitiativeSchema = Joi.object({
@@ -87,7 +88,8 @@ export const updateInitiativeSchema = Joi.object({
   tracks: Joi.array().items(initiativeCourseSchema),
   packages: Joi.array().items(initiativePackageSchema),
   startDate: Joi.date().iso(),
-  endDate: Joi.date().iso()
+  endDate: Joi.date().iso(),
+  isAvailable: Joi.boolean()
 }).unknown(true);
 
 export const enrollInitiativeSchema = Joi.object({

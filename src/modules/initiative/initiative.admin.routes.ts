@@ -1,5 +1,5 @@
 import express, { Request, Response, NextFunction } from 'express';
-import { createInitiativeCourse, updateInitiativeCourse, deleteInitiativeCourse, createInitiative, updateInitiative, deleteInitiative, addInitiativeCourseLecture, updateInitiativeCourseLecture, deleteInitiativeCourseLecture, notifyInitiativeLectureStudents, getInitiativeCourseEnrollments, getInitiativePackageEnrollments } from './initiative.controller.js';
+import { createInitiativeCourse, updateInitiativeCourse, deleteInitiativeCourse, createInitiative, updateInitiative, deleteInitiative, addInitiativeCourseLecture, updateInitiativeCourseLecture, deleteInitiativeCourseLecture, notifyInitiativeLectureStudents, getInitiativeCourseEnrollments, getInitiativePackageEnrollments, getAdminInitiativeCourses, getAdminInitiativeCourse, getAdminInitiatives, getAdminInitiative, updateInitiativeAvailability } from './initiative.controller.js';
 import { protect, restrictTo } from '../../middlewares/auth.middleware.js';
 import { validateRequest } from '../../middlewares/validation.middleware.js';
 import { createInitiativeCourseSchema, updateInitiativeCourseSchema, createInitiativeSchema, updateInitiativeSchema } from './initiative.validation.js';
@@ -61,10 +61,17 @@ const normalizeInitiativePayload = (req: Request, res: Response, next: NextFunct
 router.use(protect);
 router.use(restrictTo('admin'));
 
+router.get('/all', getAdminInitiatives);
 router.post('/all', initiativeUpload.any(), normalizeInitiativePayload, validateRequest(createInitiativeSchema), createInitiative);
+router.get('/all/:id', getAdminInitiative);
+router.patch('/all/:id/availability', updateInitiativeAvailability);
 router.patch('/all/:id', initiativeUpload.any(), normalizeInitiativePayload, validateRequest(updateInitiativeSchema), updateInitiative);
 router.delete('/all/:id', deleteInitiative);
+router.get('/', getAdminInitiativeCourses);
 router.post('/', validateRequest(createInitiativeCourseSchema), createInitiativeCourse);
+router.get('/courses/:id/enrollments', getInitiativeCourseEnrollments);
+router.get('/packages/:id/enrollments', getInitiativePackageEnrollments);
+router.get('/:id', getAdminInitiativeCourse);
 router.patch('/:id', validateRequest(updateInitiativeCourseSchema), updateInitiativeCourse);
 router.delete('/:id', deleteInitiativeCourse);
 
@@ -73,7 +80,5 @@ router.post('/:id/lectures', addInitiativeCourseLecture);
 router.patch('/:id/lectures/:lectureId', updateInitiativeCourseLecture);
 router.delete('/:id/lectures/:lectureId', deleteInitiativeCourseLecture);
 router.post('/:id/lectures/:lectureId/notify-students', notifyInitiativeLectureStudents);
-router.get('/courses/:id/enrollments', getInitiativeCourseEnrollments);
-router.get('/packages/:id/enrollments', getInitiativePackageEnrollments);
 
 export default router;

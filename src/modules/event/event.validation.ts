@@ -28,7 +28,8 @@ export const createEventSchema = Joi.object({
   partners: Joi.array().items(partnerValidationSchema),
   activities: Joi.array().items(activityValidationSchema),
   aboutEvent: Joi.string().required(),
-  keyObjectives: Joi.array().items(Joi.string())
+  keyObjectives: Joi.array().items(Joi.string()),
+  isAvailable: Joi.boolean().default(true)
 });
 
 export const updateEventSchema = Joi.object({
@@ -42,5 +43,6 @@ export const updateEventSchema = Joi.object({
   partners: Joi.array().items(partnerValidationSchema),
   activities: Joi.array().items(activityValidationSchema),
   aboutEvent: Joi.string(),
-  keyObjectives: Joi.array().items(Joi.string())
+  keyObjectives: Joi.array().items(Joi.string()),
+  isAvailable: Joi.boolean()
 });

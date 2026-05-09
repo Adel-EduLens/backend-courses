@@ -32,23 +32,26 @@ const buildLectureNotificationMessage = (
   meetingUrl: string
 ) => `Lecture reminder: "${lectureTitle}" for ${courseTitle} (${roundTitle}) starts at ${startTime}. Meeting URL: ${meetingUrl}`;
 
-/**
- * @desc    Get all courses (with their rounds)
- * @route   GET /api/courses
- * @access  Public
- */
-export const getCourses = async (req: Request, res: Response, next: NextFunction) => {
+const availableCourseFilter = { isAvailable: { $ne: false } };
+const coursePopulate = { path: 'rounds', populate: { path: 'lectures' } };
+
+const listCourses = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  baseFilter: Record<string, unknown> = {}
+) => {
   try {
     const { search } = req.query;
     const hasPagination = Boolean(req.query.page || req.query.limit || search);
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = { ...baseFilter };
 
     if (search) {
       filter.title = { $regex: search, $options: 'i' };
     }
 
     if (!hasPagination) {
-      const courses = await Course.find(filter).populate({ path: 'rounds', populate: { path: 'lectures' } });
+      const courses = await Course.find(filter).populate(coursePopulate);
       return res.status(200).json({
         success: true,
         data: courses
@@ -58,7 +61,7 @@ export const getCourses = async (req: Request, res: Response, next: NextFunction
     const { items: courses, pagination } = await paginateModel(Course, {
       query: req.query as Record<string, unknown>,
       filter,
-      populate: { path: 'rounds', populate: { path: 'lectures' } },
+      populate: coursePopulate,
       defaultLimit: 10,
     });
 
@@ -75,13 +78,54 @@ export const getCourses = async (req: Request, res: Response, next: NextFunction
 };
 
 /**
+ * @desc    Get all courses (with their rounds)
+ * @route   GET /api/courses
+ * @access  Public
+ */
+export const getCourses = async (req: Request, res: Response, next: NextFunction) => {
+  return listCourses(req, res, next, availableCourseFilter);
+};
+
+/**
+ * @desc    Get all courses for admin (including unavailable)
+ * @route   GET /api/admin/courses
+ * @access  Private/Admin
+ */
+export const getAdminCourses = async (req: Request, res: Response, next: NextFunction) => {
+  return listCourses(req, res, next);
+};
+
+/**
  * @desc    Get single course by ID (with rounds)
  * @route   GET /api/courses/:id
  * @access  Public
  */
 export const getCourse = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const course = await Course.findById(req.params.id).populate({ path: 'rounds', populate: { path: 'lectures' } });
+    const course = await Course.findOne({ _id: req.params.id, ...availableCourseFilter }).populate(coursePopulate);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Course not found'
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: course
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get single course by ID for admin
+ * @route   GET /api/admin/courses/:id
+ * @access  Private/Admin
+ */
+export const getAdminCourse = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const course = await Course.findById(req.params.id).populate(coursePopulate);
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -119,6 +163,11 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
       return res.status(404).json({ success: false, message: 'Round not found' });
     }
 
+    const course = round.course as any;
+    if (!course || course.isAvailable === false) {
+      return res.status(404).json({ success: false, message: 'Course not found' });
+    }
+
     if (round.status === 'completed') {
       return res.status(400).json({ success: false, message: 'This round has already completed' });
     }
@@ -132,7 +181,6 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    const course = round.course as any;
     let price = course.price || 0;
 
     // Validate and apply promo code

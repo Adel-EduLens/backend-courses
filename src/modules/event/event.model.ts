@@ -29,6 +29,7 @@ export interface IEvent extends Document {
   activities: IActivity[];
   aboutEvent: string;
   keyObjectives: string[];
+  isAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -86,7 +87,11 @@ const eventSchema = new Schema<IEvent>({
   },
   keyObjectives: [{
     type: String
-  }]
+  }],
+  isAvailable: {
+    type: Boolean,
+    default: true
+  }
 }, {
   timestamps: true
 });

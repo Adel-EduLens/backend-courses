@@ -34,16 +34,18 @@ const deleteGalleryImages = async (gallery: string[]) => {
   );
 };
 
-/**
- * @desc    Get all events
- * @route   GET /api/events
- * @access  Public
- */
-export const getEvents = async (req: Request, res: Response, next: NextFunction) => {
+const availableEventFilter = { isAvailable: { $ne: false } };
+
+const listEvents = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  baseFilter: Record<string, unknown> = {}
+) => {
   try {
     const { search } = req.query;
     const hasPagination = Boolean(req.query.page || req.query.limit || search);
-    const filter: Record<string, unknown> = {};
+    const filter: Record<string, unknown> = { ...baseFilter };
 
     if (search) {
       filter.title = { $regex: search, $options: 'i' };
@@ -77,11 +79,52 @@ export const getEvents = async (req: Request, res: Response, next: NextFunction)
 };
 
 /**
+ * @desc    Get all events
+ * @route   GET /api/events
+ * @access  Public
+ */
+export const getEvents = async (req: Request, res: Response, next: NextFunction) => {
+  return listEvents(req, res, next, availableEventFilter);
+};
+
+/**
+ * @desc    Get all events for admin (including unavailable)
+ * @route   GET /api/admin/events
+ * @access  Private/Admin
+ */
+export const getAdminEvents = async (req: Request, res: Response, next: NextFunction) => {
+  return listEvents(req, res, next);
+};
+
+/**
  * @desc    Get single event by ID
  * @route   GET /api/events/:id
  * @access  Public
  */
 export const getEvent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const event = await Event.findOne({ _id: req.params.id, ...availableEventFilter });
+    if (!event) {
+      return res.status(404).json({
+        success: false,
+        message: 'Event not found'
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: event
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get single event by ID for admin
+ * @route   GET /api/admin/events/:id
+ * @access  Private/Admin
+ */
+export const getAdminEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const event = await Event.findById(req.params.id);
     if (!event) {
@@ -105,7 +148,7 @@ export const getEvent = async (req: Request, res: Response, next: NextFunction) 
  */
 export const getPastEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const events = await Event.find({ status: 'past' }).sort({ date: -1 });
+    const events = await Event.find({ status: 'past', ...availableEventFilter }).sort({ date: -1 });
     res.status(200).json({
       success: true,
       data: events
@@ -122,7 +165,7 @@ export const getPastEvents = async (req: Request, res: Response, next: NextFunct
  */
 export const getUpcomingEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const events = await Event.find({ status: 'upcoming' }).sort({ date: 1 });
+    const events = await Event.find({ status: 'upcoming', ...availableEventFilter }).sort({ date: 1 });
     res.status(200).json({
       success: true,
       data: events

@@ -1,5 +1,5 @@
 import express from 'express';
-import { createCourse, updateCourse, deleteCourse, getEnrollments, createRound, updateRound, deleteRound, createLecture, updateLecture, deleteLecture, notifyLectureStudents } from './course.controller.js';
+import { createCourse, updateCourse, deleteCourse, getAdminCourses, getAdminCourse, getEnrollments, createRound, updateRound, deleteRound, createLecture, updateLecture, deleteLecture, notifyLectureStudents } from './course.controller.js';
 import { validateRequest } from '../../middlewares/validation.middleware.js';
 import { createCourseSchema, updateCourseSchema, createRoundSchema, updateRoundSchema, createLectureSchema, updateLectureSchema } from './course.validation.js';
 import { protect, restrictTo } from '../../middlewares/auth.middleware.js';
@@ -14,8 +14,10 @@ const router = express.Router();
 router.use(protect);
 router.use(restrictTo('admin'));
 
+router.get('/', getAdminCourses);
 router.post('/', upload.single('img'), normalizeCourseFormData, validateRequest(createCourseSchema), createCourse);
 router.get('/enrollments', getEnrollments);
+router.get('/:id', getAdminCourse);
 router.patch('/:id', upload.single('img'), normalizeCourseFormData, validateRequest(updateCourseSchema), updateCourse);
 router.delete('/:id', deleteCourse);
 

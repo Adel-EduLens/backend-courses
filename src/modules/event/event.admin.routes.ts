@@ -1,5 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
-import { createEvent, updateEvent, deleteEvent } from './event.controller.js';
+import { createEvent, updateEvent, deleteEvent, getAdminEvents, getAdminEvent } from './event.controller.js';
 import { protect, restrictTo } from '../../middlewares/auth.middleware.js';
 import { validateRequest } from '../../middlewares/validation.middleware.js';
 import { createEventSchema, updateEventSchema } from './event.validation.js';
@@ -47,7 +47,9 @@ const normalizeEventPayload = (req: Request, res: Response, next: NextFunction) 
 router.use(protect);
 router.use(restrictTo('admin'));
 
+router.get('/', getAdminEvents);
 router.post('/', eventGalleryUpload.any(), normalizeEventPayload, validateRequest(createEventSchema), createEvent);
+router.get('/:id', getAdminEvent);
 router.patch('/:id', eventGalleryUpload.any(), normalizeEventPayload, validateRequest(updateEventSchema), updateEvent);
 router.delete('/:id', deleteEvent);
 

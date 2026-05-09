@@ -10,6 +10,7 @@ export interface ICourse extends Document {
   targetAudience: string[];
   img: string;
   price: number;
+  isAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -48,6 +49,10 @@ const courseSchema = new Schema<ICourse>({
     required: true,
     min: 0,
     default: 0
+  },
+  isAvailable: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true,

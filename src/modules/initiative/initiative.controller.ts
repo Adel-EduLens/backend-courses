@@ -12,6 +12,7 @@ const initiativePopulate = [
   { path: 'tracks' },
   { path: 'packages.courses' }
 ];
+const availableInitiativeFilter = { isAvailable: { $ne: false } };
 
 type InitiativeCoursePayload = {
   _id?: string;
@@ -41,6 +42,70 @@ type InitiativePayload = {
   packages: InitiativePackagePayload[];
   startDate: string;
   endDate: string;
+  isAvailable?: boolean;
+};
+
+async function getAvailableInitiativeCourseIds() {
+  const initiatives = await Initiative.find(availableInitiativeFilter)
+    .select('tracks packages.courses')
+    .lean();
+  const courseIds = new Set<string>();
+
+  for (const initiative of initiatives as any[]) {
+    for (const trackId of initiative.tracks ?? []) {
+      courseIds.add(trackId.toString());
+    }
+
+    for (const packageItem of initiative.packages ?? []) {
+      for (const courseId of packageItem.courses ?? []) {
+        courseIds.add(courseId.toString());
+      }
+    }
+  }
+
+  return [...courseIds];
+}
+
+const listInitiatives = async (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  baseFilter: Record<string, unknown> = {}
+) => {
+  try {
+    const { search } = req.query;
+    const hasPagination = Boolean(req.query.page || req.query.limit || search);
+    const filter: Record<string, unknown> = { ...baseFilter };
+
+    if (search) {
+      filter.title = { $regex: search, $options: 'i' };
+    }
+
+    if (!hasPagination) {
+      const initiatives = await Initiative.find(filter).populate(initiativePopulate);
+      return res.status(200).json({
+        success: true,
+        data: initiatives
+      });
+    }
+
+    const { items: initiatives, pagination } = await paginateModel(Initiative, {
+      query: req.query as Record<string, unknown>,
+      filter,
+      populate: initiativePopulate,
+      defaultLimit: 10,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        initiatives,
+        pagination
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 async function upsertInitiativeCourse(coursePayload: InitiativeCoursePayload) {
@@ -163,7 +228,8 @@ async function buildInitiativeReferences(
  */
 export const getInitiativeCourses = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const courses = await InitiativeCourse.find().sort({ createdAt: -1 });
+    const availableCourseIds = await getAvailableInitiativeCourseIds();
+    const courses = await InitiativeCourse.find({ _id: { $in: availableCourseIds } }).sort({ createdAt: -1 });
     res.status(200).json({
       success: true,
       data: courses
@@ -179,6 +245,61 @@ export const getInitiativeCourses = async (req: Request, res: Response, next: Ne
  * @access  Public
  */
 export const getInitiativeCourse = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const availableInitiative = await Initiative.findOne({
+      ...availableInitiativeFilter,
+      $or: [
+        { tracks: req.params.id },
+        { 'packages.courses': req.params.id }
+      ]
+    });
+
+    if (!availableInitiative) {
+      return res.status(404).json({
+        success: false,
+        message: 'Initiative course not found'
+      });
+    }
+
+    const course = await InitiativeCourse.findById(req.params.id);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Initiative course not found'
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: course
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get all initiative courses for admin (including unavailable parent initiatives)
+ * @route   GET /api/admin/initiatives
+ * @access  Private/Admin
+ */
+export const getAdminInitiativeCourses = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const courses = await InitiativeCourse.find().sort({ createdAt: -1 });
+    res.status(200).json({
+      success: true,
+      data: courses
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get single initiative course by ID for admin
+ * @route   GET /api/admin/initiatives/:id
+ * @access  Private/Admin
+ */
+export const getAdminInitiativeCourse = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const course = await InitiativeCourse.findById(req.params.id);
     if (!course) {
@@ -438,40 +559,16 @@ export const notifyInitiativeLectureStudents = async (req: Request, res: Respons
  * @access  Public
  */
 export const getInitiatives = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const { search } = req.query;
-    const hasPagination = Boolean(req.query.page || req.query.limit || search);
-    const filter: Record<string, unknown> = {};
+  return listInitiatives(req, res, next, availableInitiativeFilter);
+};
 
-    if (search) {
-      filter.title = { $regex: search, $options: 'i' };
-    }
-
-    if (!hasPagination) {
-      const initiatives = await Initiative.find(filter).populate(initiativePopulate);
-      return res.status(200).json({
-        success: true,
-        data: initiatives
-      });
-    }
-
-    const { items: initiatives, pagination } = await paginateModel(Initiative, {
-      query: req.query as Record<string, unknown>,
-      filter,
-      populate: initiativePopulate,
-      defaultLimit: 10,
-    });
-
-    res.status(200).json({
-      success: true,
-      data: {
-        initiatives,
-        pagination
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
+/**
+ * @desc    Get all initiatives for admin (including unavailable)
+ * @route   GET /api/admin/initiatives/all
+ * @access  Private/Admin
+ */
+export const getAdminInitiatives = async (req: Request, res: Response, next: NextFunction) => {
+  return listInitiatives(req, res, next);
 };
 
 /**
@@ -480,6 +577,29 @@ export const getInitiatives = async (req: Request, res: Response, next: NextFunc
  * @access  Public
  */
 export const getInitiative = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const initiative = await Initiative.findOne({ _id: req.params.id, ...availableInitiativeFilter }).populate(initiativePopulate);
+    if (!initiative) {
+      return res.status(404).json({
+        success: false,
+        message: 'Initiative not found'
+      });
+    }
+    res.status(200).json({
+      success: true,
+      data: initiative
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get single initiative by ID for admin
+ * @route   GET /api/admin/initiatives/all/:id
+ * @access  Private/Admin
+ */
+export const getAdminInitiative = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const initiative = await Initiative.findById(req.params.id).populate(initiativePopulate);
     if (!initiative) {
@@ -512,6 +632,7 @@ export const createInitiative = async (req: Request, res: Response, next: NextFu
       img: payload.img,
       startDate: payload.startDate,
       endDate: payload.endDate,
+      isAvailable: payload.isAvailable ?? true,
       ...courseReferences
     } as any);
     const populatedInitiative = await Initiative.findById((initiative as any)._id).populate(initiativePopulate);
@@ -550,11 +671,45 @@ export const updateInitiative = async (req: Request, res: Response, next: NextFu
       img: payload.img,
       startDate: payload.startDate,
       endDate: payload.endDate,
+      ...(payload.isAvailable !== undefined ? { isAvailable: payload.isAvailable } : {}),
       ...courseReferences
     } as any, {
       returnDocument: 'after',
       runValidators: true
     }).populate(initiativePopulate);
+
+    res.status(200).json({
+      success: true,
+      data: initiative
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update initiative availability
+ * @route   PATCH /api/admin/initiatives/all/:id/availability
+ * @access  Private/Admin
+ */
+export const updateInitiativeAvailability = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const nextIsAvailable = req.body.isAvailable === true || req.body.isAvailable === 'true';
+    const initiative = await Initiative.findByIdAndUpdate(
+      req.params.id,
+      { isAvailable: nextIsAvailable },
+      {
+        returnDocument: 'after',
+        runValidators: true
+      }
+    ).populate(initiativePopulate);
+
+    if (!initiative) {
+      return res.status(404).json({
+        success: false,
+        message: 'Initiative not found'
+      });
+    }
 
     res.status(200).json({
       success: true,
@@ -632,7 +787,7 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
       });
     }
 
-    const initiative = await Initiative.findById(initiativeId).populate(initiativePopulate);
+    const initiative = await Initiative.findOne({ _id: initiativeId, ...availableInitiativeFilter }).populate(initiativePopulate);
     if (!initiative) {
       return res.status(404).json({ success: false, message: 'Initiative not found' });
     }
