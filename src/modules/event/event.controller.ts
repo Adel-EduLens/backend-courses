@@ -103,8 +103,16 @@ export const getAdminEvents = async (req: Request, res: Response, next: NextFunc
  */
 export const getEvent = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const event = await Event.findOne({ _id: req.params.id, ...availableEventFilter });
-    if (!event) {
+    const eventId = req.params.id;
+    if (typeof eventId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid event id'
+      });
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event || event.isAvailable === false) {
       return res.status(404).json({
         success: false,
         message: 'Event not found'

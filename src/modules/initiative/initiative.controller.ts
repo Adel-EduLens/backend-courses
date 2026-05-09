@@ -246,13 +246,21 @@ export const getInitiativeCourses = async (req: Request, res: Response, next: Ne
  */
 export const getInitiativeCourse = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const courseId = req.params.id;
+    if (typeof courseId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid initiative course id'
+      });
+    }
+
     const availableInitiative = await Initiative.findOne({
       ...availableInitiativeFilter,
       $or: [
-        { tracks: req.params.id },
-        { 'packages.courses': req.params.id }
+        { tracks: courseId },
+        { 'packages.courses': courseId }
       ]
-    });
+    } as any);
 
     if (!availableInitiative) {
       return res.status(404).json({
@@ -261,7 +269,7 @@ export const getInitiativeCourse = async (req: Request, res: Response, next: Nex
       });
     }
 
-    const course = await InitiativeCourse.findById(req.params.id);
+    const course = await InitiativeCourse.findById(courseId);
     if (!course) {
       return res.status(404).json({
         success: false,
@@ -578,8 +586,16 @@ export const getAdminInitiatives = async (req: Request, res: Response, next: Nex
  */
 export const getInitiative = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const initiative = await Initiative.findOne({ _id: req.params.id, ...availableInitiativeFilter }).populate(initiativePopulate);
-    if (!initiative) {
+    const initiativeId = req.params.id;
+    if (typeof initiativeId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid initiative id'
+      });
+    }
+
+    const initiative = await Initiative.findById(initiativeId).populate(initiativePopulate);
+    if (!initiative || initiative.isAvailable === false) {
       return res.status(404).json({
         success: false,
         message: 'Initiative not found'
@@ -787,8 +803,8 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
       });
     }
 
-    const initiative = await Initiative.findOne({ _id: initiativeId, ...availableInitiativeFilter }).populate(initiativePopulate);
-    if (!initiative) {
+    const initiative = await Initiative.findById(initiativeId).populate(initiativePopulate);
+    if (!initiative || initiative.isAvailable === false) {
       return res.status(404).json({ success: false, message: 'Initiative not found' });
     }
 

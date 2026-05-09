@@ -102,8 +102,16 @@ export const getAdminCourses = async (req: Request, res: Response, next: NextFun
  */
 export const getCourse = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const course = await Course.findOne({ _id: req.params.id, ...availableCourseFilter }).populate(coursePopulate);
-    if (!course) {
+    const courseId = req.params.id;
+    if (typeof courseId !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid course id'
+      });
+    }
+
+    const course = await Course.findById(courseId).populate(coursePopulate);
+    if (!course || course.isAvailable === false) {
       return res.status(404).json({
         success: false,
         message: 'Course not found'
