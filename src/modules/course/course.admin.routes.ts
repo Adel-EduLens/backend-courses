@@ -1,7 +1,31 @@
 import express from 'express';
-import { createCourse, updateCourse, deleteCourse, getAdminCourses, getAdminCourse, getEnrollments, createRound, updateRound, deleteRound, createLecture, updateLecture, deleteLecture, notifyLectureStudents } from './course.controller.js';
+import {
+  adminEnrollStudent,
+  createCourse,
+  updateCourse,
+  deleteCourse,
+  getAdminCourses,
+  getAdminCourse,
+  getEnrollments,
+  getAdminManualEnrollments,
+  createRound,
+  updateRound,
+  deleteRound,
+  createLecture,
+  updateLecture,
+  deleteLecture,
+  notifyLectureStudents
+} from './course.controller.js';
 import { validateRequest } from '../../middlewares/validation.middleware.js';
-import { createCourseSchema, updateCourseSchema, createRoundSchema, updateRoundSchema, createLectureSchema, updateLectureSchema } from './course.validation.js';
+import {
+  adminEnrollStudentSchema,
+  createCourseSchema,
+  updateCourseSchema,
+  createRoundSchema,
+  updateRoundSchema,
+  createLectureSchema,
+  updateLectureSchema
+} from './course.validation.js';
 import { protect, restrictTo } from '../../middlewares/auth.middleware.js';
 import { upload } from '../../utils/upload.js';
 import { normalizeCourseFormData } from '../../middlewares/normalization.middleware.js';
@@ -17,6 +41,8 @@ router.use(restrictTo('admin'));
 router.get('/', getAdminCourses);
 router.post('/', upload.single('img'), normalizeCourseFormData, validateRequest(createCourseSchema), createCourse);
 router.get('/enrollments', getEnrollments);
+router.get('/admin-enrollment', getAdminManualEnrollments);
+router.post('/admin-enrollment', validateRequest(adminEnrollStudentSchema), adminEnrollStudent);
 router.get('/:id', getAdminCourse);
 router.patch('/:id', upload.single('img'), normalizeCourseFormData, validateRequest(updateCourseSchema), updateCourse);
 router.delete('/:id', deleteCourse);

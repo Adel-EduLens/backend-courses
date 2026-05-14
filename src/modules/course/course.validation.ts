@@ -67,3 +67,36 @@ export const enrollRoundSchema = Joi.object({
   additionalInfo: Joi.string().allow('', null),
   promoCode: Joi.string().allow('', null)
 });
+
+export const adminEnrollStudentSchema = Joi.object({
+  targetType: Joi.string().valid('courseRound', 'initiativeTrack', 'initiativePackage').required(),
+  studentId: Joi.string().hex().length(24).required(),
+  roundId: Joi.when('targetType', {
+    is: 'courseRound',
+    then: Joi.string().hex().length(24).required(),
+    otherwise: Joi.string().hex().length(24).optional()
+  }),
+  initiativeId: Joi.when('targetType', {
+    is: Joi.valid('initiativeTrack', 'initiativePackage'),
+    then: Joi.string().hex().length(24).required(),
+    otherwise: Joi.string().hex().length(24).optional()
+  }),
+  trackId: Joi.when('targetType', {
+    is: 'initiativeTrack',
+    then: Joi.string().hex().length(24).required(),
+    otherwise: Joi.string().hex().length(24).optional()
+  }),
+  packageId: Joi.when('targetType', {
+    is: 'initiativePackage',
+    then: Joi.string().hex().length(24).required(),
+    otherwise: Joi.string().hex().length(24).optional()
+  }),
+  selectedCourseIds: Joi.array().items(Joi.string().hex().length(24)).default([]),
+  manualPaymentStatus: Joi.string().valid('free', 'paid').default('free'),
+  manualPaymentAmount: Joi.when('manualPaymentStatus', {
+    is: 'paid',
+    then: Joi.number().positive().required(),
+    otherwise: Joi.number().min(0).optional()
+  }),
+  additionalInfo: Joi.string().allow('', null)
+});

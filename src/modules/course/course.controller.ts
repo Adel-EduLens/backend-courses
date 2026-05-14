@@ -4,6 +4,9 @@ import { Round } from './round.model.js';
 import { Lecture } from './lecture.model.js';
 import Enrollment from './enrollment.model.js';
 import { Payment } from '../payment/payment.model.js';
+import { Student } from '../student/student.model.js';
+import { Initiative } from '../initiative/initiative.model.js';
+import Admin from '../admin/admin.model.js';
 import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
 import { paginateModel } from '../../utils/pagination.util.js';
 import { PromoCode } from '../promoCode/promoCode.model.js';
@@ -34,6 +37,10 @@ const buildLectureNotificationMessage = (
 
 const availableCourseFilter = { isAvailable: { $ne: false } };
 const coursePopulate = { path: 'rounds', populate: { path: 'lectures' } };
+const initiativePopulate = [
+  { path: 'tracks' },
+  { path: 'packages.courses' }
+];
 
 const listCourses = async (
   req: Request,
@@ -281,6 +288,331 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json({
         success: false,
         message: 'You have already enrolled in this round.'
+      });
+    }
+    next(error);
+  }
+};
+
+/**
+ * @desc    Get admin-created enrollments
+ * @route   GET /api/admin/courses/admin-enrollment
+ * @access  Private/Admin
+ */
+export const getAdminManualEnrollments = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { search, targetType } = req.query;
+    const filter: Record<string, unknown> = { manualEnrollment: true };
+
+    if (
+      targetType === 'courseRound' ||
+      targetType === 'initiativeTrack' ||
+      targetType === 'initiativePackage'
+    ) {
+      filter.adminEnrollmentType = targetType;
+    }
+
+    if (typeof search === 'string' && search.trim()) {
+      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      const matchingAdmins = await Admin.find({
+        $or: [
+          { name: searchRegex },
+          { email: searchRegex }
+        ]
+      }).select('_id').lean();
+
+      filter.$or = [
+        { fullName: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+        { additionalInfo: searchRegex },
+        { createdByAdmin: { $in: matchingAdmins.map((admin) => admin._id) } }
+      ];
+    }
+
+    const { items: enrollments, pagination } = await paginateModel(Enrollment, {
+      query: req.query as Record<string, unknown>,
+      filter,
+      populate: [
+        { path: 'referenceId' },
+        { path: 'selectedCourses', select: 'title' },
+        { path: 'createdByAdmin', select: 'name email' }
+      ],
+      sort: { createdAt: -1 },
+      defaultLimit: 10,
+      transform: async (items: any[]) => {
+        for (const enrollment of items) {
+          if (enrollment.referenceModel === 'Round' && enrollment.referenceId) {
+            await (enrollment.referenceId as any).populate({
+              path: 'course',
+              select: 'title'
+            });
+          }
+        }
+
+        const paymentOrderIds = items
+          .map((enrollment) => enrollment.paymentOrderId)
+          .filter(Boolean);
+
+        const payments = paymentOrderIds.length > 0
+          ? await Payment.find({ orderId: { $in: paymentOrderIds } })
+              .select('orderId amount status transactionId paymentDetails customer createdAt updatedAt')
+              .lean()
+          : [];
+
+        const paymentByOrderId = new Map(
+          payments.map((payment: any) => [payment.orderId, payment])
+        );
+
+        return items.map((enrollment) => ({
+          ...(typeof enrollment.toObject === 'function' ? enrollment.toObject() : enrollment),
+          payment: enrollment.paymentOrderId ? paymentByOrderId.get(enrollment.paymentOrderId) ?? null : null
+        }));
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        enrollments,
+        pagination
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Manually enroll a student in a course round, initiative track, or initiative package
+ * @route   POST /api/admin/courses/admin-enrollment
+ * @access  Private/Admin
+ */
+export const adminEnrollStudent = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const {
+      targetType,
+      studentId,
+      roundId,
+      initiativeId,
+      trackId,
+      packageId,
+      additionalInfo,
+      manualPaymentStatus,
+      manualPaymentAmount
+    } = req.body;
+    const adminId = (req as any).user?._id;
+    const requestedTargetType = targetType as 'courseRound' | 'initiativeTrack' | 'initiativePackage';
+    const requestedPaymentStatus = manualPaymentStatus === 'paid' ? 'paid' : 'free';
+    const parsedManualPaymentAmount = Number(manualPaymentAmount) || 0;
+
+    if (
+      requestedTargetType !== 'courseRound' &&
+      requestedTargetType !== 'initiativeTrack' &&
+      requestedTargetType !== 'initiativePackage'
+    ) {
+      return res.status(400).json({ success: false, message: 'Invalid enrollment target.' });
+    }
+
+    if (requestedPaymentStatus === 'paid' && parsedManualPaymentAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Enter a paid amount for this enrollment.' });
+    }
+
+    const student = await Student.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ success: false, message: 'Student not found' });
+    }
+
+    if (!student.name || !student.email || !student.phone) {
+      return res.status(400).json({
+        success: false,
+        message: 'This student profile is missing required contact information.'
+      });
+    }
+
+    const trimmedAdditionalInfo = typeof additionalInfo === 'string' ? additionalInfo.trim() : '';
+    const baseEnrollmentData = {
+      studentId: student._id,
+      fullName: student.name,
+      email: student.email,
+      phone: student.phone,
+      additionalInfo: trimmedAdditionalInfo || 'Manual enrollment by admin',
+      manualEnrollment: true,
+      adminEnrollmentType: requestedTargetType,
+      manualPaymentStatus: requestedPaymentStatus,
+      createdByAdmin: adminId
+    };
+
+    let enrollmentData: Record<string, unknown>;
+    let duplicateQuery: Record<string, unknown>;
+    let duplicateMessage = 'This student is already enrolled in this selection.';
+
+    if (requestedTargetType === 'courseRound') {
+      const round = await Round.findById(roundId).populate('course');
+      if (!round) {
+        return res.status(404).json({ success: false, message: 'Round not found' });
+      }
+
+      const course = round.course as any;
+      if (!course) {
+        return res.status(404).json({ success: false, message: 'Course not found' });
+      }
+
+      enrollmentData = {
+        ...baseEnrollmentData,
+        referenceId: roundId,
+        referenceModel: 'Round'
+      };
+      duplicateQuery = {
+        referenceId: roundId,
+        referenceModel: 'Round',
+        $or: [
+          { studentId: student._id },
+          { phone: student.phone }
+        ]
+      };
+      duplicateMessage = 'This student is already enrolled in this round.';
+    } else {
+      const initiative = await Initiative.findById(initiativeId).populate(initiativePopulate);
+      if (!initiative) {
+        return res.status(404).json({ success: false, message: 'Initiative not found' });
+      }
+
+      const enrollmentTarget = requestedTargetType === 'initiativeTrack' ? 'track' : 'package';
+      let selectedCourses: string[] = [];
+      let packageIdentifier = '';
+
+      if (requestedTargetType === 'initiativeTrack') {
+        const track = initiative.tracks.find((item: any) => item._id.toString() === trackId) as any;
+        if (!track) {
+          return res.status(404).json({ success: false, message: 'Track not found in this initiative.' });
+        }
+
+        selectedCourses = [trackId];
+        packageIdentifier = trackId;
+        duplicateMessage = 'This student is already enrolled in this track.';
+      } else {
+        const initiativePackage = initiative.packages.find((item: any) => item._id?.toString() === packageId) as any;
+        if (!initiativePackage) {
+          return res.status(404).json({ success: false, message: 'Initiative package not found.' });
+        }
+
+        packageIdentifier = initiativePackage._id.toString();
+        const packageCourseIds = initiativePackage.courses.map((course: any) => course._id.toString());
+
+        if (initiativePackage.type === 'full') {
+          selectedCourses = packageCourseIds;
+        } else {
+          const requestedCourseIds = Array.isArray(req.body.selectedCourseIds) ? req.body.selectedCourseIds : [];
+          const uniqueSelectedCourseIds = Array.from(new Set<string>(requestedCourseIds as string[]));
+
+          if (uniqueSelectedCourseIds.length === 0) {
+            return res.status(400).json({
+              success: false,
+              message: 'Select at least one track for this custom package.'
+            });
+          }
+
+          if (uniqueSelectedCourseIds.length > (initiativePackage.maxCourses ?? packageCourseIds.length)) {
+            return res.status(400).json({
+              success: false,
+              message: `You can select up to ${initiativePackage.maxCourses} tracks in this custom package.`
+            });
+          }
+
+          const hasInvalidCourse = uniqueSelectedCourseIds.some((courseId) => !packageCourseIds.includes(courseId));
+          if (hasInvalidCourse) {
+            return res.status(400).json({
+              success: false,
+              message: 'One or more selected tracks do not belong to this package.'
+            });
+          }
+
+          selectedCourses = uniqueSelectedCourseIds;
+        }
+
+        duplicateMessage = 'This student is already enrolled in this package.';
+      }
+
+      enrollmentData = {
+        ...baseEnrollmentData,
+        referenceId: initiativeId,
+        referenceModel: 'Initiative',
+        enrollmentTarget,
+        initiativePackageId: packageIdentifier,
+        selectedCourses
+      };
+      duplicateQuery = {
+        referenceId: initiativeId,
+        referenceModel: 'Initiative',
+        enrollmentTarget,
+        initiativePackageId: packageIdentifier,
+        $or: [
+          { studentId: student._id },
+          { phone: student.phone }
+        ]
+      };
+    }
+
+    const existing = await Enrollment.findOne(duplicateQuery);
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: duplicateMessage
+      });
+    }
+
+    const enrollment = await Enrollment.create(enrollmentData);
+
+    if (requestedPaymentStatus === 'paid') {
+      const paymentOrderId = `Manual_${requestedTargetType}_${Date.now()}_${student._id.toString()}`;
+
+      const payment = await Payment.create({
+        orderId: paymentOrderId,
+        referenceId: (enrollment as any).referenceId,
+        referenceModel: (enrollment as any).referenceModel,
+        amount: parsedManualPaymentAmount,
+        status: 'success',
+        customer: {
+          name: student.name,
+          email: student.email,
+          phone: student.phone
+        },
+        paymentDetails: {
+          studentId: student._id,
+          enrollmentId: enrollment._id,
+          manualEnrollment: true,
+          adminEnrollmentType: requestedTargetType,
+          createdByAdmin: adminId,
+          additionalInfo: trimmedAdditionalInfo || undefined,
+          enrollmentTarget: (enrollment as any).enrollmentTarget,
+          initiativePackageId: (enrollment as any).initiativePackageId,
+          selectedCourses: (enrollment as any).selectedCourses
+        }
+      });
+
+      (enrollment as any).paymentOrderId = payment.orderId;
+      await enrollment.save();
+    }
+
+    const populatedEnrollment = await Enrollment.findById(enrollment._id)
+      .populate([
+        { path: 'referenceId' },
+        { path: 'selectedCourses', select: 'title' },
+        { path: 'createdByAdmin', select: 'name email' }
+      ])
+      .lean();
+
+    res.status(201).json({
+      success: true,
+      message: 'Enrollment opened for the student successfully.',
+      data: populatedEnrollment ?? enrollment
+    });
+  } catch (error: any) {
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'This student is already enrolled in this selection.'
       });
     }
     next(error);

@@ -13,6 +13,10 @@ export interface IEnrollment extends Document {
   additionalInfo?: string;
   paymentOrderId?: string;
   promoCode?: string;
+  manualEnrollment?: boolean;
+  adminEnrollmentType?: 'courseRound' | 'initiativeTrack' | 'initiativePackage';
+  manualPaymentStatus?: 'free' | 'paid';
+  createdByAdmin?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -70,6 +74,22 @@ const enrollmentSchema = new Schema<IEnrollment>({
   promoCode: {
     type: String,
     trim: true
+  },
+  manualEnrollment: {
+    type: Boolean,
+    default: false
+  },
+  adminEnrollmentType: {
+    type: String,
+    enum: ['courseRound', 'initiativeTrack', 'initiativePackage']
+  },
+  manualPaymentStatus: {
+    type: String,
+    enum: ['free', 'paid']
+  },
+  createdByAdmin: {
+    type: Schema.Types.ObjectId,
+    ref: 'Admin'
   }
 }, {
   timestamps: true
