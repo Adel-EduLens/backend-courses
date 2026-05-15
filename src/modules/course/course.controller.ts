@@ -301,7 +301,7 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
  */
 export const getAdminManualEnrollments = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { search, targetType } = req.query;
+    const { search, targetType, paymentStatus } = req.query;
     const filter: Record<string, unknown> = { manualEnrollment: true };
 
     if (
@@ -310,6 +310,12 @@ export const getAdminManualEnrollments = async (req: Request, res: Response, nex
       targetType === 'initiativePackage'
     ) {
       filter.adminEnrollmentType = targetType;
+    }
+
+    if (paymentStatus === 'paid') {
+      filter.paymentOrderId = { $ne: null };
+    } else if (paymentStatus === 'free') {
+      filter.paymentOrderId = null;
     }
 
     if (typeof search === 'string' && search.trim()) {
