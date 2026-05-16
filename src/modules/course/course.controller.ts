@@ -7,6 +7,7 @@ import { Payment } from '../payment/payment.model.js';
 import { Student } from '../student/student.model.js';
 import { Initiative } from '../initiative/initiative.model.js';
 import Admin from '../admin/admin.model.js';
+import Event from '../event/event.model.js';
 import { createPaymentSession, calculateAmountWithFees } from '../../utils/kashier.service.js';
 import { paginateModel } from '../../utils/pagination.util.js';
 import { PromoCode } from '../promoCode/promoCode.model.js';
@@ -208,7 +209,7 @@ export const enrollInRound = async (req: Request, res: Response, next: NextFunct
           $expr: { $lt: ['$currentUses', '$maxUses'] }
         },
         {},
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       if (!promo) {
@@ -307,7 +308,8 @@ export const getAdminManualEnrollments = async (req: Request, res: Response, nex
     if (
       targetType === 'courseRound' ||
       targetType === 'initiativeTrack' ||
-      targetType === 'initiativePackage'
+      targetType === 'initiativePackage' ||
+      targetType === 'event'
     ) {
       filter.adminEnrollmentType = targetType;
     }
@@ -403,19 +405,21 @@ export const adminEnrollStudent = async (req: Request, res: Response, next: Next
       initiativeId,
       trackId,
       packageId,
+      eventId,
       additionalInfo,
       manualPaymentStatus,
       manualPaymentAmount
     } = req.body;
     const adminId = (req as any).user?._id;
-    const requestedTargetType = targetType as 'courseRound' | 'initiativeTrack' | 'initiativePackage';
+    const requestedTargetType = targetType as 'courseRound' | 'initiativeTrack' | 'initiativePackage' | 'event';
     const requestedPaymentStatus = manualPaymentStatus === 'paid' ? 'paid' : 'free';
     const parsedManualPaymentAmount = Number(manualPaymentAmount) || 0;
 
     if (
       requestedTargetType !== 'courseRound' &&
       requestedTargetType !== 'initiativeTrack' &&
-      requestedTargetType !== 'initiativePackage'
+      requestedTargetType !== 'initiativePackage' &&
+      requestedTargetType !== 'event'
     ) {
       return res.status(400).json({ success: false, message: 'Invalid enrollment target.' });
     }
@@ -478,6 +482,26 @@ export const adminEnrollStudent = async (req: Request, res: Response, next: Next
         ]
       };
       duplicateMessage = 'This student is already enrolled in this round.';
+    } else if (requestedTargetType === 'event') {
+      const event = await Event.findById(eventId);
+      if (!event) {
+        return res.status(404).json({ success: false, message: 'Event not found' });
+      }
+
+      enrollmentData = {
+        ...baseEnrollmentData,
+        referenceId: eventId,
+        referenceModel: 'Event'
+      };
+      duplicateQuery = {
+        referenceId: eventId,
+        referenceModel: 'Event',
+        $or: [
+          { studentId: student._id },
+          { phone: student.phone }
+        ]
+      };
+      duplicateMessage = 'This student is already enrolled in this event.';
     } else {
       const initiative = await Initiative.findById(initiativeId).populate(initiativePopulate);
       if (!initiative) {

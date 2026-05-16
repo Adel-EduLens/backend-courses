@@ -23,6 +23,8 @@ export interface IEvent extends Document {
   location: string;
   status: 'past' | 'upcoming';
   date: Date;
+  price: number;
+  img?: string;
   eventGallery: string[];
   speakers: ISpeaker[];
   partners: IPartner[];
@@ -74,6 +76,15 @@ const eventSchema = new Schema<IEvent>({
   date: {
     type: Date,
     required: true
+  },
+  price: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  img: {
+    type: String,
+    default: ''
   },
   eventGallery: [{
     type: String

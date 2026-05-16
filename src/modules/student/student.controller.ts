@@ -84,6 +84,20 @@ export const enrichEnrollment = async (enrollment: any) => {
     };
   }
 
+  if (plainEnrollment.referenceModel === 'Event') {
+    const eventDate = reference.date ? new Date(reference.date).toLocaleDateString('en-US') : 'Event';
+    const eventImage = reference.img || reference.eventGallery?.[0] || reference.speakers?.[0]?.img || '';
+
+    return {
+      ...plainEnrollment,
+      displayTitle: reference.title || 'Event',
+      displaySubtitle: eventDate,
+      displayImage: eventImage,
+      displayDescription: reference.description || '',
+      detailsPath: reference._id ? `/events/${reference._id}` : null
+    };
+  }
+
   const initiative = await Initiative.findOne({
     $or: [
       { tracks: reference._id },

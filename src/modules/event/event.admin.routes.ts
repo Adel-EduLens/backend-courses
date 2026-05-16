@@ -37,6 +37,11 @@ const normalizeEventPayload = (req: Request, res: Response, next: NextFunction) 
     }
   }
 
+  if (req.body.price !== undefined) {
+    const parsedPrice = Number(req.body.price);
+    req.body.price = Number.isFinite(parsedPrice) ? parsedPrice : 0;
+  }
+
   delete req.body.existingGallery;
   next();
 };

@@ -8,6 +8,7 @@ export interface IPromoCode extends Document {
   applicableTo: {
     type: 'all' | 'specific';
     courses: mongoose.Types.ObjectId[];
+    events: mongoose.Types.ObjectId[];
     initiativePackages: {
       initiativeId: mongoose.Types.ObjectId;
       packageId: string;
@@ -54,6 +55,10 @@ const promoCodeSchema = new Schema<IPromoCode>({
     courses: [{
       type: Schema.Types.ObjectId,
       ref: 'Course'
+    }],
+    events: [{
+      type: Schema.Types.ObjectId,
+      ref: 'Event'
     }],
     initiativePackages: [{
       initiativeId: { type: Schema.Types.ObjectId, ref: 'Initiative' },

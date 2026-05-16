@@ -7,6 +7,7 @@ import { Round } from '../course/round.model.js';
 import { Course } from '../course/course.model.js';
 import { Initiative } from '../initiative/initiative.model.js';
 import { InitiativeCourse } from '../initiative/initiative_course.model.js';
+import Event from '../event/event.model.js';
 import { paginateModel } from '../../utils/pagination.util.js';
 
 type PromoUsageRecord = {
@@ -30,6 +31,7 @@ async function buildUsageLabelMaps(usages: Array<{
 }>) {
   const roundIds = new Set<string>();
   const courseIds = new Set<string>();
+  const eventIds = new Set<string>();
   const initiativeIds = new Set<string>();
   const initiativeCourseIds = new Set<string>();
 
@@ -39,6 +41,10 @@ async function buildUsageLabelMaps(usages: Array<{
 
     if (usage.referenceModel === 'Round') {
       roundIds.add(referenceId);
+    } else if (usage.referenceModel === 'Course') {
+      courseIds.add(referenceId);
+    } else if (usage.referenceModel === 'Event') {
+      eventIds.add(referenceId);
     } else if (usage.referenceModel === 'Initiative') {
       initiativeIds.add(referenceId);
       if (usage.enrollmentTarget === 'track' && usage.initiativePackageId) {
@@ -49,12 +55,15 @@ async function buildUsageLabelMaps(usages: Array<{
     }
   });
 
-  const [rounds, courses, initiatives, initiativeCourses] = await Promise.all([
+  const [rounds, courses, events, initiatives, initiativeCourses] = await Promise.all([
     roundIds.size > 0
       ? Round.find({ _id: { $in: [...roundIds] } }).populate('course', 'title').select('title course')
       : Promise.resolve([]),
     courseIds.size > 0
       ? Course.find({ _id: { $in: [...courseIds] } }).select('title')
+      : Promise.resolve([]),
+    eventIds.size > 0
+      ? Event.find({ _id: { $in: [...eventIds] } }).select('title')
       : Promise.resolve([]),
     initiativeIds.size > 0
       ? Initiative.find({ _id: { $in: [...initiativeIds] } }).populate('tracks', 'title').select('title packages tracks')
@@ -75,6 +84,7 @@ async function buildUsageLabelMaps(usages: Array<{
   );
 
   const courseMap = new Map(courses.map((course) => [course._id.toString(), course.title]));
+  const eventMap = new Map(events.map((event) => [event._id.toString(), event.title]));
   const initiativeCourseMap = new Map(initiativeCourses.map((track) => [track._id.toString(), track.title]));
   const initiativeMap = new Map(
     initiatives.map((initiative: any) => [
@@ -86,7 +96,7 @@ async function buildUsageLabelMaps(usages: Array<{
     ])
   );
 
-  return { roundMap, courseMap, initiativeMap, initiativeCourseMap };
+  return { roundMap, courseMap, eventMap, initiativeMap, initiativeCourseMap };
 }
 
 function formatUsedOnLabel(
@@ -142,6 +152,13 @@ function formatUsedOnLabel(
     }
   }
 
+  if (usage.referenceModel === 'Event') {
+    const eventTitle = maps.eventMap.get(referenceId);
+    if (eventTitle) {
+      return `Event: ${eventTitle}`;
+    }
+  }
+
   return usage.referenceModel || 'Unknown';
 }
 
@@ -159,7 +176,10 @@ export const getPromoCodes = async (req: Request, res: Response, next: NextFunct
       const promoCodes = await PromoCode.find()
         .find(filter)
         .populate('applicableTo.courses', 'title')
+        .populate('applicableTo.events', 'title')
         .populate('applicableTo.initiativePackages.initiativeId', 'title')
+        .populate('applicableTo.initiativeTracks.initiativeId', 'title')
+        .populate('applicableTo.initiativeTracks.trackId', 'title')
         .sort({ createdAt: -1 });
 
       return successResponse(res, { data: { promoCodes } });
@@ -170,7 +190,10 @@ export const getPromoCodes = async (req: Request, res: Response, next: NextFunct
       filter,
       populate: [
         { path: 'applicableTo.courses', select: 'title' },
-        { path: 'applicableTo.initiativePackages.initiativeId', select: 'title' }
+        { path: 'applicableTo.events', select: 'title' },
+        { path: 'applicableTo.initiativePackages.initiativeId', select: 'title' },
+        { path: 'applicableTo.initiativeTracks.initiativeId', select: 'title' },
+        { path: 'applicableTo.initiativeTracks.trackId', select: 'title' }
       ],
       sort: { createdAt: -1 },
       defaultLimit: 10,
@@ -186,6 +209,7 @@ export const getPromoCode = async (req: Request, res: Response, next: NextFuncti
   try {
     const promoCode = await PromoCode.findById(req.params.id)
       .populate('applicableTo.courses', 'title')
+      .populate('applicableTo.events', 'title')
       .populate('applicableTo.initiativePackages.initiativeId', 'title')
       .populate('applicableTo.initiativeTracks.initiativeId', 'title')
       .populate('applicableTo.initiativeTracks.trackId', 'title');
@@ -260,7 +284,10 @@ export const createPromoCode = async (req: Request, res: Response, next: NextFun
 
 export const updatePromoCode = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const promoCode = await PromoCode.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const promoCode = await PromoCode.findByIdAndUpdate(req.params.id, req.body, {
+      returnDocument: 'after',
+      runValidators: true
+    });
     if (!promoCode) {
       return res.status(404).json({ success: false, message: 'Promo code not found' });
     }
@@ -304,15 +331,22 @@ export const validatePromoCode = async (req: Request, res: Response, next: NextF
 
     if (promoCode.applicableTo.type === 'specific') {
       if (itemType === 'course') {
-        const isApplicable = promoCode.applicableTo.courses.some(
+        const isApplicable = (promoCode.applicableTo.courses ?? []).some(
           (courseId) => courseId.toString() === itemId
         );
         if (!isApplicable) {
           return res.status(400).json({ success: false, message: 'This promo code does not apply to this course.' });
         }
+      } else if (itemType === 'event') {
+        const isApplicable = (promoCode.applicableTo.events ?? []).some(
+          (eventId) => eventId.toString() === itemId
+        );
+        if (!isApplicable) {
+          return res.status(400).json({ success: false, message: 'This promo code does not apply to this event.' });
+        }
       } else if (itemType === 'initiative' && packageId) {
         // This handles packages
-        const isApplicable = promoCode.applicableTo.initiativePackages.some(
+        const isApplicable = (promoCode.applicableTo.initiativePackages ?? []).some(
           (pkg) => pkg.initiativeId.toString() === itemId && pkg.packageId === packageId
         );
         if (!isApplicable) {
@@ -323,7 +357,7 @@ export const validatePromoCode = async (req: Request, res: Response, next: NextF
         // Wait, if it's a track enrollment, we need to know which track.
         // Let's adjust the request to include trackId.
         const trackId = req.body.trackId;
-        const isApplicable = promoCode.applicableTo.initiativeTracks.some(
+        const isApplicable = (promoCode.applicableTo.initiativeTracks ?? []).some(
           (track) => track.initiativeId.toString() === itemId && track.trackId.toString() === trackId
         );
         if (!isApplicable) {

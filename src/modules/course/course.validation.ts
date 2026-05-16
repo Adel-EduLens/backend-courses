@@ -69,7 +69,7 @@ export const enrollRoundSchema = Joi.object({
 });
 
 export const adminEnrollStudentSchema = Joi.object({
-  targetType: Joi.string().valid('courseRound', 'initiativeTrack', 'initiativePackage').required(),
+  targetType: Joi.string().valid('courseRound', 'initiativeTrack', 'initiativePackage', 'event').required(),
   studentId: Joi.string().hex().length(24).required(),
   roundId: Joi.when('targetType', {
     is: 'courseRound',
@@ -88,6 +88,11 @@ export const adminEnrollStudentSchema = Joi.object({
   }),
   packageId: Joi.when('targetType', {
     is: 'initiativePackage',
+    then: Joi.string().hex().length(24).required(),
+    otherwise: Joi.string().hex().length(24).optional()
+  }),
+  eventId: Joi.when('targetType', {
+    is: 'event',
     then: Joi.string().hex().length(24).required(),
     otherwise: Joi.string().hex().length(24).optional()
   }),

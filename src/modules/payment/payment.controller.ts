@@ -109,6 +109,7 @@ export const handleKashierWebhook = async (req: Request, res: Response, next: Ne
         try {
           const enrollmentFilter: Record<string, unknown> = {
             referenceId: payment.referenceId,
+            referenceModel: payment.referenceModel,
             studentId,
           };
 

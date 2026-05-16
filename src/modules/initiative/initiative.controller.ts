@@ -899,7 +899,7 @@ export const enrollInInitiative = async (req: Request, res: Response, next: Next
           $expr: { $lt: ['$currentUses', '$maxUses'] }
         },
         {},
-        { new: true }
+        { returnDocument: 'after' }
       );
 
       if (!promo) {

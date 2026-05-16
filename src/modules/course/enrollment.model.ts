@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IEnrollment extends Document {
   studentId: mongoose.Types.ObjectId;
   referenceId: mongoose.Types.ObjectId;
-  referenceModel: 'Round' | 'InitiativeCourse' | 'Initiative';
+  referenceModel: 'Round' | 'InitiativeCourse' | 'Initiative' | 'Event';
   enrollmentTarget?: 'track' | 'package';
   initiativePackageId?: string;
   selectedCourses?: mongoose.Types.ObjectId[];
@@ -14,7 +14,7 @@ export interface IEnrollment extends Document {
   paymentOrderId?: string;
   promoCode?: string;
   manualEnrollment?: boolean;
-  adminEnrollmentType?: 'courseRound' | 'initiativeTrack' | 'initiativePackage';
+  adminEnrollmentType?: 'courseRound' | 'initiativeTrack' | 'initiativePackage' | 'event';
   manualPaymentStatus?: 'free' | 'paid';
   createdByAdmin?: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -35,7 +35,7 @@ const enrollmentSchema = new Schema<IEnrollment>({
   referenceModel: {
     type: String,
     required: true,
-    enum: ['Round', 'InitiativeCourse', 'Initiative']
+    enum: ['Round', 'InitiativeCourse', 'Initiative', 'Event']
   },
   enrollmentTarget: {
     type: String,
@@ -81,7 +81,7 @@ const enrollmentSchema = new Schema<IEnrollment>({
   },
   adminEnrollmentType: {
     type: String,
-    enum: ['courseRound', 'initiativeTrack', 'initiativePackage']
+    enum: ['courseRound', 'initiativeTrack', 'initiativePackage', 'event']
   },
   manualPaymentStatus: {
     type: String,

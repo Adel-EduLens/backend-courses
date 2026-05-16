@@ -18,6 +18,7 @@ export const createPromoCodeSchema = Joi.object({
   applicableTo: Joi.object({
     type: Joi.string().valid('all', 'specific').default('all'),
     courses: Joi.array().items(objectIdSchema).default([]),
+    events: Joi.array().items(objectIdSchema).default([]),
     initiativePackages: Joi.array().items(
       Joi.object({
         initiativeId: objectIdSchema.required(),
@@ -30,7 +31,7 @@ export const createPromoCodeSchema = Joi.object({
         trackId: objectIdSchema.required()
       })
     ).default([])
-  }).default({ type: 'all', courses: [], initiativePackages: [], initiativeTracks: [] }),
+  }).default({ type: 'all', courses: [], events: [], initiativePackages: [], initiativeTracks: [] }),
   isActive: Joi.boolean().default(true)
 });
 
@@ -41,6 +42,7 @@ export const updatePromoCodeSchema = Joi.object({
   applicableTo: Joi.object({
     type: Joi.string().valid('all', 'specific'),
     courses: Joi.array().items(objectIdSchema).default([]),
+    events: Joi.array().items(objectIdSchema).default([]),
     initiativePackages: Joi.array().items(
       Joi.object({
         initiativeId: objectIdSchema.required(),
@@ -61,7 +63,7 @@ export const validatePromoCodeSchema = Joi.object({
   code: Joi.string().required().messages({
     'string.empty': 'Promo code is required'
   }),
-  itemType: Joi.string().valid('course', 'initiative').required(),
+  itemType: Joi.string().valid('course', 'initiative', 'event').required(),
   itemId: Joi.string().required(),
   packageId: Joi.string().allow('', null),
   trackId: Joi.string().allow('', null)

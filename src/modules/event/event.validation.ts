@@ -23,6 +23,8 @@ export const createEventSchema = Joi.object({
   location: Joi.string().required(),
   status: Joi.string().valid('past', 'upcoming').required(),
   date: Joi.date().required(),
+  price: Joi.number().min(0).default(0),
+  img: Joi.string().allow(''),
   eventGallery: Joi.array().items(Joi.string()),
   speakers: Joi.array().items(speakerValidationSchema),
   partners: Joi.array().items(partnerValidationSchema),
@@ -30,7 +32,7 @@ export const createEventSchema = Joi.object({
   aboutEvent: Joi.string().required(),
   keyObjectives: Joi.array().items(Joi.string()),
   isAvailable: Joi.boolean().default(true)
-});
+}).unknown(true);
 
 export const updateEventSchema = Joi.object({
   title: Joi.string(),
@@ -38,6 +40,8 @@ export const updateEventSchema = Joi.object({
   location: Joi.string(),
   status: Joi.string().valid('past', 'upcoming'),
   date: Joi.date(),
+  price: Joi.number().min(0),
+  img: Joi.string().allow(''),
   eventGallery: Joi.array().items(Joi.string()),
   speakers: Joi.array().items(speakerValidationSchema),
   partners: Joi.array().items(partnerValidationSchema),
@@ -45,4 +49,10 @@ export const updateEventSchema = Joi.object({
   aboutEvent: Joi.string(),
   keyObjectives: Joi.array().items(Joi.string()),
   isAvailable: Joi.boolean()
+}).unknown(true);
+
+export const reserveEventSchema = Joi.object({
+  eventId: Joi.string().hex().length(24).required(),
+  additionalInfo: Joi.string().allow('', null),
+  promoCode: Joi.string().allow('', null)
 });
