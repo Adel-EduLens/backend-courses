@@ -8,9 +8,9 @@ import { deleteFile, getRelativePathFromUrl } from '../../utils/fileSystem.util.
 import { calculateAmountWithFees, createPaymentSession } from '../../utils/kashier.service.js';
 import { paginateModel } from '../../utils/pagination.util.js';
 
-const getFileUrl = (req: Request, file: Express.Multer.File) => {
+const getFileUrl = (file: Express.Multer.File) => {
   const relativePath = path.relative(path.resolve('public'), file.path).split(path.sep).join('/');
-  return `${req.protocol}://${req.get('host')}/${relativePath}`;
+  return `/${relativePath}`;
 };
 
 const getFilesByFieldName = (req: Request, fieldName: string) => {
@@ -24,11 +24,11 @@ const getFileByFieldName = (req: Request, fieldName: string) => {
 };
 
 const getUploadedGalleryUrls = (req: Request) =>
-  getFilesByFieldName(req, 'eventGallery').map((file) => getFileUrl(req, file));
+  getFilesByFieldName(req, 'eventGallery').map((file) => getFileUrl(file));
 
 const getUploadedEventImageUrl = (req: Request) => {
   const file = getFileByFieldName(req, 'img');
-  return file ? getFileUrl(req, file) : undefined;
+  return file ? getFileUrl(file) : undefined;
 };
 
 const deleteGalleryImages = async (gallery: string[]) => {
@@ -341,7 +341,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       req.body.speakers = req.body.speakers.map((speaker: any, index: number) => {
         const file = getFileByFieldName(req, `speaker_img_${index}`);
         if (file) {
-          speaker.img = getFileUrl(req, file);
+          speaker.img = getFileUrl(file);
         }
         return speaker;
       });
@@ -351,7 +351,7 @@ export const createEvent = async (req: Request, res: Response, next: NextFunctio
       req.body.partners = req.body.partners.map((partner: any, index: number) => {
         const file = getFileByFieldName(req, `partner_img_${index}`);
         if (file) {
-          partner.img = getFileUrl(req, file);
+          partner.img = getFileUrl(file);
         }
         return partner;
       });
@@ -398,7 +398,7 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       req.body.speakers = req.body.speakers.map((speaker: any, index: number) => {
         const file = getFileByFieldName(req, `speaker_img_${index}`);
         if (file) {
-          speaker.img = getFileUrl(req, file);
+          speaker.img = getFileUrl(file);
         }
         return speaker;
       });
@@ -408,7 +408,7 @@ export const updateEvent = async (req: Request, res: Response, next: NextFunctio
       req.body.partners = req.body.partners.map((partner: any, index: number) => {
         const file = getFileByFieldName(req, `partner_img_${index}`);
         if (file) {
-          partner.img = getFileUrl(req, file);
+          partner.img = getFileUrl(file);
         }
         return partner;
       });

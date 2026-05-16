@@ -12,9 +12,9 @@ interface NormalizedBadge {
   logo: string;
 }
 
-const getFileUrl = (req: Request, file: Express.Multer.File) => {
+const getFileUrl = (file: Express.Multer.File) => {
   const relativePath = path.relative(path.resolve('public'), file.path).split(path.sep).join('/');
-  return `${req.protocol}://${req.get('host')}/${relativePath}`;
+  return `/${relativePath}`;
 };
 
 const getUploadedBadgeFiles = (req: Request) => {
@@ -79,7 +79,7 @@ export const updateTrustedBadgeContent = async (req: Request, res: Response, nex
 
       return {
         name: badge.name || existingBadge?.name || '',
-        logo: uploadedFile ? getFileUrl(req, uploadedFile) : badge.logo || existingBadge?.logo || ''
+        logo: uploadedFile ? getFileUrl(uploadedFile) : badge.logo || existingBadge?.logo || ''
       };
     });
 
