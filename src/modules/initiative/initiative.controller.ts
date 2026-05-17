@@ -1039,9 +1039,12 @@ export const getInitiativeCourseEnrollments = async (req: Request, res: Response
     }
 
     // 2. Identify packages that include this course
-    const packageIds = initiative.packages
-      .filter(pkg => pkg.courses.some(cId => cId.toString() === courseId))
-      .map(pkg => pkg._id.toString());
+    const matchingPackages = initiative.packages
+      .filter(pkg => pkg.courses.some(cId => cId.toString() === courseId));
+    const packageIds = matchingPackages.map(pkg => pkg._id.toString());
+    const packageTitleById = new Map(
+      matchingPackages.map(pkg => [pkg._id.toString(), pkg.title])
+    );
 
     // 3. Find all relevant enrollments
     const enrollments = await Enrollment.find({
@@ -1065,12 +1068,38 @@ export const getInitiativeCourseEnrollments = async (req: Request, res: Response
           selectedCourses: courseId 
         }
       ]
-    } as any).sort({ createdAt: -1 });
+    } as any)
+      .populate('selectedCourses', 'title')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const paymentOrderIds = enrollments
+      .map((enrollment: any) => enrollment.paymentOrderId)
+      .filter(Boolean);
+
+    const payments = paymentOrderIds.length > 0
+      ? await Payment.find({ orderId: { $in: paymentOrderIds } })
+          .select('orderId amount status transactionId paymentDetails customer createdAt updatedAt')
+          .lean()
+      : [];
+
+    const paymentByOrderId = new Map(
+      payments.map((payment: any) => [payment.orderId, payment])
+    );
+
+    const enrollmentsWithDetails = enrollments.map((enrollment: any) => ({
+      ...enrollment,
+      displayTitle: enrollment.enrollmentTarget === 'package'
+        ? packageTitleById.get(String(enrollment.initiativePackageId)) ?? 'Package access'
+        : 'All Tracks',
+      displaySubtitle: initiative.title,
+      payment: enrollment.paymentOrderId ? paymentByOrderId.get(enrollment.paymentOrderId) ?? null : null
+    }));
 
     res.status(200).json({
       success: true,
-      count: enrollments.length,
-      data: enrollments
+      count: enrollmentsWithDetails.length,
+      data: enrollmentsWithDetails
     });
   } catch (error) {
     next(error);
@@ -1086,16 +1115,43 @@ export const getInitiativePackageEnrollments = async (req: Request, res: Respons
   try {
     const { id: packageId } = req.params;
 
+    const initiative = await Initiative.findOne({ 'packages._id': packageId } as any);
+    const packageItem = initiative?.packages.find(pkg => pkg._id.toString() === packageId);
+
     const enrollments = await Enrollment.find({
       referenceModel: 'Initiative',
       enrollmentTarget: 'package',
       initiativePackageId: packageId
-    } as any).sort({ createdAt: -1 });
+    } as any)
+      .populate('selectedCourses', 'title')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const paymentOrderIds = enrollments
+      .map((enrollment: any) => enrollment.paymentOrderId)
+      .filter(Boolean);
+
+    const payments = paymentOrderIds.length > 0
+      ? await Payment.find({ orderId: { $in: paymentOrderIds } })
+          .select('orderId amount status transactionId paymentDetails customer createdAt updatedAt')
+          .lean()
+      : [];
+
+    const paymentByOrderId = new Map(
+      payments.map((payment: any) => [payment.orderId, payment])
+    );
+
+    const enrollmentsWithDetails = enrollments.map((enrollment: any) => ({
+      ...enrollment,
+      displayTitle: packageItem?.title ?? 'Package access',
+      displaySubtitle: initiative?.title,
+      payment: enrollment.paymentOrderId ? paymentByOrderId.get(enrollment.paymentOrderId) ?? null : null
+    }));
 
     res.status(200).json({
       success: true,
-      count: enrollments.length,
-      data: enrollments
+      count: enrollmentsWithDetails.length,
+      data: enrollmentsWithDetails
     });
   } catch (error) {
     next(error);
