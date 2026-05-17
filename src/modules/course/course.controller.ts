@@ -970,11 +970,12 @@ export const deleteLecture = async (req: Request, res: Response, next: NextFunct
  */
 export const getEnrollments = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { search, courseId, roundId, dateFrom, dateTo } = req.query;
+    const { search, type, courseId, roundId, dateFrom, dateTo } = req.query;
     const hasPaginationOrFilters = Boolean(
       req.query.page ||
       req.query.limit ||
       search ||
+      type ||
       courseId ||
       roundId ||
       dateFrom ||
@@ -1014,6 +1015,25 @@ export const getEnrollments = async (req: Request, res: Response, next: NextFunc
       query.$or = [
         { fullName: { $regex: search, $options: 'i' } },
         { phone: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (type === 'course') {
+      query.referenceModel = 'Round';
+    } else if (type === 'event') {
+      query.referenceModel = 'Event';
+    } else if (type === 'package') {
+      query.referenceModel = 'Initiative';
+      query.enrollmentTarget = 'package';
+    } else if (type === 'track') {
+      query.$and = [
+        ...(query.$and ?? []),
+        {
+          $or: [
+            { referenceModel: 'Initiative', enrollmentTarget: 'track' },
+            { referenceModel: 'InitiativeCourse' }
+          ]
+        }
       ];
     }
 
