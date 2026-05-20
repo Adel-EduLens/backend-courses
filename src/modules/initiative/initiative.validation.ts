@@ -78,6 +78,7 @@ export const createInitiativeSchema = Joi.object({
     'date.greater': 'End date must be after the start date',
     'date.format': 'End date must be a valid date'
   }),
+  baseEnrollmentCount: Joi.number().min(0).default(0),
   isAvailable: Joi.boolean().default(true)
 }).unknown(true);
 
@@ -89,6 +90,7 @@ export const updateInitiativeSchema = Joi.object({
   packages: Joi.array().items(initiativePackageSchema),
   startDate: Joi.date().iso(),
   endDate: Joi.date().iso(),
+  baseEnrollmentCount: Joi.number().min(0),
   isAvailable: Joi.boolean()
 }).unknown(true);
 

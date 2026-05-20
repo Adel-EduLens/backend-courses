@@ -12,6 +12,7 @@ export const createCourseSchema = Joi.object({
   targetAudience: Joi.array().items(Joi.string().allow('').trim()).default([]),
   img: Joi.string().required(),
   price: Joi.number().min(0).default(0),
+  baseEnrollmentCount: Joi.number().min(0).default(0),
   isAvailable: Joi.boolean().default(true)
 });
 
@@ -27,6 +28,7 @@ export const updateCourseSchema = Joi.object({
   targetAudience: Joi.array().items(Joi.string().allow('').trim()),
   img: Joi.string().allow(''),
   price: Joi.number().min(0),
+  baseEnrollmentCount: Joi.number().min(0),
   isAvailable: Joi.boolean()
 });
 

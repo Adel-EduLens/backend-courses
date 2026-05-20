@@ -41,6 +41,10 @@ const normalizeEventPayload = (req: Request, res: Response, next: NextFunction) 
     const parsedPrice = Number(req.body.price);
     req.body.price = Number.isFinite(parsedPrice) ? parsedPrice : 0;
   }
+  if (req.body.baseEnrollmentCount !== undefined) {
+    const parsed = Number(req.body.baseEnrollmentCount);
+    req.body.baseEnrollmentCount = Number.isFinite(parsed) ? parsed : 0;
+  }
 
   delete req.body.existingGallery;
   next();

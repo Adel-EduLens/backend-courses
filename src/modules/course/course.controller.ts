@@ -59,10 +59,36 @@ const listCourses = async (
     }
 
     if (!hasPagination) {
-      const courses = await Course.find(filter).populate(coursePopulate);
+      const courses = await Course.find(filter).populate(coursePopulate).lean();
+
+      // Gather all round IDs across all courses
+      const allRoundIds = courses.flatMap((course: any) =>
+        (course.rounds ?? []).map((round: any) => round._id)
+      );
+
+      // Count enrollments per round in one query
+      const roundEnrollmentCounts = allRoundIds.length > 0
+        ? await Enrollment.aggregate([
+            { $match: { referenceId: { $in: allRoundIds }, referenceModel: 'Round' } },
+            { $group: { _id: '$referenceId', count: { $sum: 1 } } },
+          ])
+        : [];
+
+      const countByRoundId = new Map(
+        roundEnrollmentCounts.map((item: any) => [String(item._id), item.count as number])
+      );
+
+      const coursesWithCounts = courses.map((course: any) => {
+        const realCount = (course.rounds ?? []).reduce(
+          (total: number, round: any) => total + (countByRoundId.get(String(round._id)) || 0),
+          0
+        );
+        return { ...course, enrollmentCount: (course.baseEnrollmentCount || 0) + realCount };
+      });
+
       return res.status(200).json({
         success: true,
-        data: courses
+        data: coursesWithCounts
       });
     }
 

@@ -82,10 +82,28 @@ const listInitiatives = async (
     }
 
     if (!hasPagination) {
-      const initiatives = await Initiative.find(filter).populate(initiativePopulate);
+      const initiatives = await Initiative.find(filter).populate(initiativePopulate).lean();
+
+      const initiativeIds = initiatives.map((initiative: any) => initiative._id);
+      const initiativeEnrollmentCounts = initiativeIds.length > 0
+        ? await Enrollment.aggregate([
+            { $match: { referenceId: { $in: initiativeIds }, referenceModel: 'Initiative' } },
+            { $group: { _id: '$referenceId', count: { $sum: 1 } } },
+          ])
+        : [];
+
+      const countByInitiativeId = new Map(
+        initiativeEnrollmentCounts.map((item: any) => [String(item._id), item.count as number])
+      );
+
+      const initiativesWithCounts = initiatives.map((initiative: any) => ({
+        ...initiative,
+        enrollmentCount: (initiative.baseEnrollmentCount || 0) + (countByInitiativeId.get(String(initiative._id)) || 0),
+      }));
+
       return res.status(200).json({
         success: true,
-        data: initiatives
+        data: initiativesWithCounts
       });
     }
 

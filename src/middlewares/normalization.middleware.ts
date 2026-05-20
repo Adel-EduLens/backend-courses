@@ -18,6 +18,9 @@ export const normalizeCourseFormData = (req: Request, res: Response, next: NextF
   if (req.body.price !== undefined) {
     req.body.price = Number(req.body.price);
   }
+  if (req.body.baseEnrollmentCount !== undefined) {
+    req.body.baseEnrollmentCount = Number(req.body.baseEnrollmentCount);
+  }
   if (req.file) {
     req.body.img = `/uploads/courses/${req.file.filename}`;
   }

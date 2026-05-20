@@ -31,6 +31,7 @@ export interface IEvent extends Document {
   activities: IActivity[];
   aboutEvent: string;
   keyObjectives: string[];
+  baseEnrollmentCount: number;
   isAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -99,6 +100,11 @@ const eventSchema = new Schema<IEvent>({
   keyObjectives: [{
     type: String
   }],
+  baseEnrollmentCount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   isAvailable: {
     type: Boolean,
     default: true

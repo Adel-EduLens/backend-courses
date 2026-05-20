@@ -61,10 +61,28 @@ const listEvents = async (
     }
 
     if (!hasPagination) {
-      const events = await Event.find(filter).sort({ date: -1 });
+      const events = await Event.find(filter).sort({ date: -1 }).lean();
+
+      const eventIds = events.map((event: any) => event._id);
+      const eventEnrollmentCounts = eventIds.length > 0
+        ? await Enrollment.aggregate([
+            { $match: { referenceId: { $in: eventIds }, referenceModel: 'Event' } },
+            { $group: { _id: '$referenceId', count: { $sum: 1 } } },
+          ])
+        : [];
+
+      const countByEventId = new Map(
+        eventEnrollmentCounts.map((item: any) => [String(item._id), item.count as number])
+      );
+
+      const eventsWithCounts = events.map((event: any) => ({
+        ...event,
+        enrollmentCount: (event.baseEnrollmentCount || 0) + (countByEventId.get(String(event._id)) || 0),
+      }));
+
       return res.status(200).json({
         success: true,
-        data: events
+        data: eventsWithCounts
       });
     }
 

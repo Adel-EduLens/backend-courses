@@ -20,6 +20,7 @@ export interface IInitiative extends Document {
   packages: IInitiativePackage[];
   startDate: Date;
   endDate: Date;
+  baseEnrollmentCount: number;
   isAvailable: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -100,6 +101,11 @@ const initiativeSchema = new Schema<IInitiative>({
   endDate: {
     type: Date,
     required: true
+  },
+  baseEnrollmentCount: {
+    type: Number,
+    default: 0,
+    min: 0
   },
   isAvailable: {
     type: Boolean,
