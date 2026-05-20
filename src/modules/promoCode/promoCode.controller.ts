@@ -16,19 +16,21 @@ type PromoUsageRecord = {
   email: string;
   phone: string;
   referenceModel: string;
-  enrollmentTarget?: 'track' | 'package';
-  referenceId?: unknown;
-  initiativePackageId?: string;
+  enrollmentTarget?: 'track' | 'package' | undefined;
+  referenceId?: unknown | undefined;
+  initiativePackageId?: string | undefined;
   createdAt: Date;
   usedOnLabel: string;
 };
 
-async function buildUsageLabelMaps(usages: Array<{
-  referenceModel?: string;
-  referenceId?: unknown;
-  initiativePackageId?: string;
-  enrollmentTarget?: 'track' | 'package';
-}>) {
+type PromoUsageLabelSource = {
+  referenceModel?: string | undefined;
+  referenceId?: unknown | undefined;
+  initiativePackageId?: string | undefined;
+  enrollmentTarget?: 'track' | 'package' | undefined;
+};
+
+async function buildUsageLabelMaps(usages: PromoUsageLabelSource[]) {
   const roundIds = new Set<string>();
   const courseIds = new Set<string>();
   const eventIds = new Set<string>();

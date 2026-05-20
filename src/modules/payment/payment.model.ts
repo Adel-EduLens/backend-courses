@@ -1,5 +1,20 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
+export interface IPaymentDetails {
+  [key: string]: unknown;
+  studentId?: mongoose.Types.ObjectId | string | undefined;
+  enrollmentId?: mongoose.Types.ObjectId | string | undefined;
+  additionalInfo?: string | undefined;
+  promoCode?: string | undefined;
+  selectedCourses?: Array<mongoose.Types.ObjectId | string> | undefined;
+  enrollmentTarget?: 'track' | 'package' | undefined;
+  initiativePackageId?: string | undefined;
+  adminEnrollmentType?: 'courseRound' | 'initiativeTrack' | 'initiativePackage' | 'event' | undefined;
+  manualEnrollment?: boolean | undefined;
+  createdByAdmin?: mongoose.Types.ObjectId | string | undefined;
+  kashierResponse?: Record<string, unknown> | undefined;
+}
+
 export interface IPayment extends Document {
   orderId: string;
   referenceId: mongoose.Types.ObjectId;
@@ -7,7 +22,7 @@ export interface IPayment extends Document {
   amount: number;
   status: 'pending' | 'success' | 'failed' | 'cancelled';
   transactionId?: string;
-  paymentDetails?: any;
+  paymentDetails?: IPaymentDetails;
   customer?: {
     name: string;
     email?: string;
