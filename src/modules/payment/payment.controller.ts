@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { Payment } from './payment.model.js';
-import { createPaymentSession, calculateAmountWithFees, verifyWebhookSignature, verifyTransactionStatus } from '../../utils/kashier.service.js';
+import { createPaymentSession, calculateAmountWithFees, verifyWebhookSignature, verifyRedirectSignature } from '../../utils/kashier.service.js';
 import mongoose from 'mongoose';
 import Enrollment from '../course/enrollment.model.js';
 import { PromoCode } from '../promoCode/promoCode.model.js';

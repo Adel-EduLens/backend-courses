@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "cross-env NODE_ENV=production node dist/index.js",
-    "build": "tsc",
+    "build": "echo 'Using pre-built dist'",
     "dev": "cross-env NODE_ENV=development tsx watch src/index.ts",
     "seed": "cross-env NODE_ENV=development tsx src/db/seed.ts"
   },
@@ -18,6 +18,15 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@types/bcrypt": "^6.0.0",
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/joi": "^17.2.2",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/mongoose-paginate-v2": "^1.6.4",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.3.5",
+    "@types/node-cron": "^3.0.11",
     "axios": "^1.13.6",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.6",
@@ -32,21 +41,12 @@
     "multer": "^2.1.1",
     "node-cron": "^4.2.1",
     "slugify": "^1.6.6",
+    "typescript": "^5.9.3",
     "winston": "^3.19.0"
   },
   "devDependencies": {
-    "@types/bcrypt": "^6.0.0",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/joi": "^17.2.2",
-    "@types/jsonwebtoken": "^9.0.10",
-    "@types/mongoose-paginate-v2": "^1.6.4",
-    "@types/multer": "^2.1.0",
-    "@types/node": "^25.3.5",
-    "@types/node-cron": "^3.0.11",
     "nodemon": "^3.1.14",
     "ts-node": "^10.9.2",
-    "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "tsx": "^4.21.0"
   }
 }

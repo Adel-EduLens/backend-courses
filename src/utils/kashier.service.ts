@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import axios from 'axios';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development' });
@@ -9,7 +8,21 @@ const KASHIER_CONFIG = {
   apiKey: process.env.KASHIER_API_KEY,
   secretKey: process.env.KASHIER_SECRET_KEY,
   mode: process.env.KASHIER_MODE || 'test',
-  baseUrl: process.env.KASHIER_MODE === 'live' ? 'https://api.kashier.io' : 'https://test-api.kashier.io',
+  checkoutUrl: 'https://checkout.kashier.io',
+};
+
+const getKashierHashKey = () => KASHIER_CONFIG.apiKey || KASHIER_CONFIG.secretKey || '';
+
+const formatKashierAmount = (amount: number) => amount.toFixed(2);
+
+const generateCheckoutHash = (merchantId: string, orderId: string, amount: string, currency: string) => {
+  const hashKey = getKashierHashKey();
+  const hashPayload = `/?payment=${merchantId}.${orderId}.${amount}.${currency}`;
+
+  return crypto
+    .createHmac('sha256', hashKey)
+    .update(hashPayload)
+    .digest('hex');
 };
 
 /**
@@ -18,11 +31,11 @@ const KASHIER_CONFIG = {
  */
 export const calculateAmountWithFees = (baseAmount: number): number => {
   const finalAmount = (baseAmount + 2) / (1 - 0.015);
-  return Math.round(finalAmount * 100) / 100; // Round to 2 decimal places
+  return Math.round(finalAmount * 100) / 100;
 };
 
 /**
- * Creates a payment session with Kashier V3 API
+ * Creates a Kashier hosted checkout URL.
  */
 export const createPaymentSession = async (orderData: {
   amount: number;
@@ -31,42 +44,72 @@ export const createPaymentSession = async (orderData: {
   customerEmail?: string;
   customerPhone?: string;
 }) => {
-  const { merchantId, secretKey, apiKey, baseUrl } = KASHIER_CONFIG;
-
-  const payload = {
-    merchantId,
-    amount: String(orderData.amount),
-    currency: 'EGP',
-    merchantOrderId: orderData.merchantOrderId,
-    customer: {
-      reference: orderData.merchantOrderId,
-      name: orderData.customerName,
-      email: orderData.customerEmail || 'customer@example.com',
-      phone: orderData.customerPhone || '01000000000'
-    },
-    serverWebhook: `${process.env.BASE_URL}/api/payments/kashier/webhook`,
-    merchantRedirect: `${process.env.BASE_URL}/api/payments/kashier/success`,
-    display: 'ar' // or 'en'
-  };
+  const { merchantId, checkoutUrl, mode } = KASHIER_CONFIG;
 
   try {
-    const response = await axios.post(`${baseUrl}/v3/payment/sessions`, payload, {
-      headers: {
-        'Authorization': secretKey || '',
-        'api-key': apiKey || secretKey || '',
-        'Content-Type': 'application/json'
-      }
+    if (!merchantId || !getKashierHashKey()) {
+      throw new Error('Missing Kashier merchant ID or payment API key');
+    }
+
+    const currency = 'EGP';
+    const amount = formatKashierAmount(orderData.amount);
+    const merchantRedirect = `${process.env.BASE_URL}/api/payments/kashier/success`;
+    const hash = generateCheckoutHash(merchantId, orderData.merchantOrderId, amount, currency);
+    const metaData = JSON.stringify({
+      customerName: orderData.customerName,
+      customerEmail: orderData.customerEmail || '',
+      customerPhone: orderData.customerPhone || ''
     });
 
     return {
-      ...(response.data.data || {}),
-      ...response.data
+      sessionUrl: `${checkoutUrl}?${new URLSearchParams({
+        merchantId,
+        orderId: orderData.merchantOrderId,
+        amount,
+        currency,
+        hash,
+        merchantRedirect,
+        metaData,
+        failureRedirect: 'true',
+        redirectMethod: 'get',
+        display: 'ar',
+        mode
+      }).toString()}`
     };
   } catch (error: any) {
     const detail = error.response?.data || error.message;
     console.error('Kashier Session Error:', JSON.stringify(detail, null, 2));
     throw new Error('Failed to create payment session');
   }
+};
+
+export const verifyRedirectSignature = (query: Record<string, unknown>): boolean => {
+  const signature = String(query.signature || '');
+  const hashKey = getKashierHashKey();
+
+  if (!signature || !hashKey) return false;
+
+  const signaturePayload = [
+    ['paymentStatus', query.paymentStatus],
+    ['cardDataToken', query.cardDataToken],
+    ['maskedCard', query.maskedCard],
+    ['merchantOrderId', query.merchantOrderId],
+    ['orderId', query.orderId],
+    ['cardBrand', query.cardBrand],
+    ['orderReference', query.orderReference],
+    ['transactionId', query.transactionId],
+    ['amount', query.amount],
+    ['currency', query.currency],
+  ]
+    .map(([key, value]) => `${key}=${value ?? ''}`)
+    .join('&');
+
+  const calculatedSignature = crypto
+    .createHmac('sha256', hashKey)
+    .update(signaturePayload)
+    .digest('hex');
+
+  return signature === calculatedSignature;
 };
 
 /**
@@ -78,42 +121,16 @@ export const verifyWebhookSignature = (body: any, signature: string): boolean =>
 
   if (!data || !data.signatureKeys || !secretKey) return false;
 
-  // 1. Sort signature keys alphabetically
   const sortedKeys = [...data.signatureKeys].sort();
 
-  // 2. Build query string from sorted keys
   const signaturePayload = sortedKeys
     .map(key => `${key}=${data[key]}`)
     .join('&');
 
-  // 3. Generate HMAC-SHA256 hash using Secret Key
   const calculatedSignature = crypto
     .createHmac('sha256', secretKey)
     .update(signaturePayload)
     .digest('hex');
 
   return signature === calculatedSignature;
-};
-
-/**
- * Verifies transaction status directly with Kashier API
- */
-export const verifyTransactionStatus = async (merchantOrderId: string) => {
-  const { secretKey, apiKey, baseUrl } = KASHIER_CONFIG;
-
-  try {
-    // Correct V3 endpoint for checking by merchant order ID
-    const response = await axios.get(`${baseUrl}/v3/payment/sessions?merchantOrderId=${merchantOrderId}`, {
-      headers: {
-        'Authorization': secretKey || '',
-        'api-key': apiKey || secretKey || ''
-      }
-    });
-
-
-    return response.data;
-  } catch (error: any) {
-    console.error('Kashier Verification Error:', error.response?.data || error.message);
-    return null;
-  }
 };
