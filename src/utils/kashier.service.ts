@@ -1,29 +1,52 @@
 import crypto from 'crypto';
+import axios from 'axios';
 import dotenv from 'dotenv';
 
 dotenv.config({ path: process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development' });
 
-const KASHIER_CONFIG = {
-  merchantId: process.env.KASHIER_MERCHANT_ID,
-  apiKey: process.env.KASHIER_API_KEY,
-  secretKey: process.env.KASHIER_SECRET_KEY,
+const cleanEnvValue = (value: string | undefined) => {
+  if (!value) return value;
+
+  return value
+    .trim()
+    .replace(/^["']|["']$/g, '')
+    .replace(/\\\$/g, '$');
+};
+
+const getKashierConfig = () => ({
+  merchantId: cleanEnvValue(process.env.KASHIER_MERCHANT_ID),
+  apiKey: cleanEnvValue(process.env.KASHIER_API_KEY),
+  secretKey: cleanEnvValue(process.env.KASHIER_SECRET_KEY),
   mode: process.env.KASHIER_MODE || 'test',
-  checkoutUrl: 'https://checkout.kashier.io',
+  baseUrl:
+    process.env.KASHIER_MODE === 'live'
+      ? 'https://api.kashier.io'
+      : 'https://test-api.kashier.io',
+});
+
+const getKashierHashKey = () => {
+  const { apiKey, secretKey } = getKashierConfig();
+  return apiKey || secretKey || '';
 };
 
-const getKashierHashKey = () => KASHIER_CONFIG.apiKey || KASHIER_CONFIG.secretKey || '';
+const getSecretFingerprint = (value: string | undefined) => {
+  if (!value) return null;
 
-const formatKashierAmount = (amount: number) => amount.toFixed(2);
-
-const generateCheckoutHash = (merchantId: string, orderId: string, amount: string, currency: string) => {
-  const hashKey = getKashierHashKey();
-  const hashPayload = `/?payment=${merchantId}.${orderId}.${amount}.${currency}`;
-
-  return crypto
-    .createHmac('sha256', hashKey)
-    .update(hashPayload)
-    .digest('hex');
+  return {
+    length: value.length,
+    sha256Prefix: crypto.createHash('sha256').update(value).digest('hex').slice(0, 12),
+  };
 };
+
+const normalizePublicUrl = (url: string | undefined, label: string) => {
+  if (!url || !/^https?:\/\//.test(url)) {
+    throw new Error(`${label} must be a public HTTP(S) URL for Kashier callbacks`);
+  }
+
+  return url.replace(/\/$/, '');
+};
+
+const getPublicBaseUrl = () => normalizePublicUrl(process.env.BASE_URL, 'BASE_URL');
 
 /**
  * Calculates the final amount including Kashier fees (1.5% + 2 EGP)
@@ -35,7 +58,7 @@ export const calculateAmountWithFees = (baseAmount: number): number => {
 };
 
 /**
- * Creates a Kashier hosted checkout URL.
+ * Creates a payment session with Kashier V3 API.
  */
 export const createPaymentSession = async (orderData: {
   amount: number;
@@ -44,37 +67,55 @@ export const createPaymentSession = async (orderData: {
   customerEmail?: string;
   customerPhone?: string;
 }) => {
-  const { merchantId, checkoutUrl, mode } = KASHIER_CONFIG;
+  const { merchantId, secretKey, apiKey, baseUrl } = getKashierConfig();
+
+  const payload = {
+    merchantId,
+    amount: String(orderData.amount),
+    currency: 'EGP',
+    merchantOrderId: orderData.merchantOrderId,
+    customer: {
+      reference: orderData.merchantOrderId,
+      name: orderData.customerName,
+      email: orderData.customerEmail || 'customer@example.com',
+      phone: orderData.customerPhone || '01000000000',
+    },
+    serverWebhook: `${getPublicBaseUrl()}/api/payments/kashier/webhook`,
+    merchantRedirect: `${getPublicBaseUrl()}/api/payments/kashier/success`,
+    display: 'en',
+  };
 
   try {
     if (!merchantId || !getKashierHashKey()) {
       throw new Error('Missing Kashier merchant ID or payment API key');
     }
 
-    const currency = 'EGP';
-    const amount = formatKashierAmount(orderData.amount);
-    const merchantRedirect = `${process.env.BASE_URL}/api/payments/kashier/success`;
-    const hash = generateCheckoutHash(merchantId, orderData.merchantOrderId, amount, currency);
-    const metaData = JSON.stringify({
-      customerName: orderData.customerName,
-      customerEmail: orderData.customerEmail || '',
-      customerPhone: orderData.customerPhone || ''
+    console.log('[Kashier Session] Creating V3 session:', {
+      endpoint: `${baseUrl}/v3/payment/sessions`,
+      mode: process.env.KASHIER_MODE || 'test',
+      merchantId,
+      hasApiKey: Boolean(apiKey),
+      hasSecretKey: Boolean(secretKey),
+      apiKeyFingerprint: getSecretFingerprint(apiKey),
+      secretKeyFingerprint: getSecretFingerprint(secretKey),
+      merchantOrderId: orderData.merchantOrderId,
+      amount: payload.amount,
+      currency: payload.currency,
+      serverWebhook: payload.serverWebhook,
+      merchantRedirect: payload.merchantRedirect,
+    });
+
+    const response = await axios.post(`${baseUrl}/v3/payment/sessions`, payload, {
+      headers: {
+        Authorization: secretKey || '',
+        'api-key': apiKey || secretKey || '',
+        'Content-Type': 'application/json',
+      },
     });
 
     return {
-      sessionUrl: `${checkoutUrl}?${new URLSearchParams({
-        merchantId,
-        orderId: orderData.merchantOrderId,
-        amount,
-        currency,
-        hash,
-        merchantRedirect,
-        metaData,
-        failureRedirect: 'true',
-        redirectMethod: 'get',
-        display: 'ar',
-        mode
-      }).toString()}`
+      ...(response.data.data || {}),
+      ...response.data,
     };
   } catch (error: any) {
     const detail = error.response?.data || error.message;
@@ -112,11 +153,31 @@ export const verifyRedirectSignature = (query: Record<string, unknown>): boolean
   return signature === calculatedSignature;
 };
 
+export const getKashierOrderDetails = async (merchantOrderId: string) => {
+  const { secretKey, apiKey, baseUrl } = getKashierConfig();
+
+  if (!merchantOrderId || (!secretKey && !apiKey)) return null;
+
+  try {
+    const response = await axios.get(`${baseUrl}/payments/orders/${encodeURIComponent(merchantOrderId)}`, {
+      headers: {
+        Authorization: secretKey || apiKey || '',
+      },
+    });
+
+    return response.data?.response || response.data;
+  } catch (error: any) {
+    const detail = error.response?.data || error.message;
+    console.error('Kashier Order Reconciliation Error:', JSON.stringify(detail, null, 2));
+    return null;
+  }
+};
+
 /**
  * Verifies the webhook signature from Kashier
  */
 export const verifyWebhookSignature = (body: any, signature: string): boolean => {
-  const { secretKey } = KASHIER_CONFIG;
+  const { secretKey } = getKashierConfig();
   const { data } = body;
 
   if (!data || !data.signatureKeys || !secretKey) return false;
