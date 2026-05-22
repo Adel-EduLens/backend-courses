@@ -1,17 +1,13 @@
-import path from 'path';
 import { Request, Response, NextFunction } from 'express';
 import Event from './event.model.js';
 import Enrollment from '../course/enrollment.model.js';
 import { Payment } from '../payment/payment.model.js';
 import { PromoCode } from '../promoCode/promoCode.model.js';
-import { deleteFile, getRelativePathFromUrl } from '../../utils/fileSystem.util.js';
+import { deleteFile } from '../../utils/fileSystem.util.js';
 import { calculateAmountWithFees, createPaymentSession } from '../../utils/kashier.service.js';
 import { paginateModel } from '../../utils/pagination.util.js';
 
-const getFileUrl = (file: Express.Multer.File) => {
-  const relativePath = path.relative(path.resolve('public'), file.path).split(path.sep).join('/');
-  return `/${relativePath}`;
-};
+const getFileUrl = (file: Express.Multer.File) => file.path;
 
 const getFilesByFieldName = (req: Request, fieldName: string) => {
   const files = Array.isArray(req.files) ? (req.files as Express.Multer.File[]) : [];
@@ -34,11 +30,8 @@ const getUploadedEventImageUrl = (req: Request) => {
 const deleteGalleryImages = async (gallery: string[]) => {
   await Promise.all(
     gallery.map(async (imageUrl) => {
-      const relativePath = getRelativePathFromUrl(imageUrl);
-
-      if (!relativePath) return;
-
-      await deleteFile(path.resolve('public', relativePath));
+      if (!imageUrl) return;
+      await deleteFile(imageUrl);
     })
   );
 };

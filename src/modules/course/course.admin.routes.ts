@@ -39,12 +39,12 @@ router.use(protect);
 router.use(restrictTo('admin'));
 
 router.get('/', getAdminCourses);
-router.post('/', upload.single('img'), normalizeCourseFormData, validateRequest(createCourseSchema), createCourse);
+router.post('/', ...upload.single('img'), normalizeCourseFormData, validateRequest(createCourseSchema), createCourse);
 router.get('/enrollments', getEnrollments);
 router.get('/admin-enrollment', getAdminManualEnrollments);
 router.post('/admin-enrollment', validateRequest(adminEnrollStudentSchema), adminEnrollStudent);
 router.get('/:id', getAdminCourse);
-router.patch('/:id', upload.single('img'), normalizeCourseFormData, validateRequest(updateCourseSchema), updateCourse);
+router.patch('/:id', ...upload.single('img'), normalizeCourseFormData, validateRequest(updateCourseSchema), updateCourse);
 router.delete('/:id', deleteCourse);
 
 // Round management

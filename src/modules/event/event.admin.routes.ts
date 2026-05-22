@@ -57,9 +57,9 @@ router.use(protect);
 router.use(restrictTo('admin'));
 
 router.get('/', getAdminEvents);
-router.post('/', eventGalleryUpload.any(), normalizeEventPayload, validateRequest(createEventSchema), createEvent);
+router.post('/', ...eventGalleryUpload.any(), normalizeEventPayload, validateRequest(createEventSchema), createEvent);
 router.get('/:id', getAdminEvent);
-router.patch('/:id', eventGalleryUpload.any(), normalizeEventPayload, validateRequest(updateEventSchema), updateEvent);
+router.patch('/:id', ...eventGalleryUpload.any(), normalizeEventPayload, validateRequest(updateEventSchema), updateEvent);
 router.delete('/:id', deleteEvent);
 
 export default router;

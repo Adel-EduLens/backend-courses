@@ -26,27 +26,26 @@ const normalizeInitiativePayload = (req: Request, res: Response, next: NextFunct
 
   if (req.files && Array.isArray(req.files)) {
     for (const file of req.files) {
-      const path = '/' + file.path.split('/public/')[1];
+      const url = file.path; // S3 URL is already stored in file.path
       if (file.fieldname === 'img') {
-        req.body.img = path;
+        req.body.img = url;
       } else if (file.fieldname.startsWith('trackImage_')) {
-        // fieldname format: trackImage_<index>
         const tIdx = Number(file.fieldname.split('trackImage_')[1]);
         if (
-          !isNaN(tIdx) && 
+          !isNaN(tIdx) &&
           req.body.tracks?.[tIdx]
         ) {
-          req.body.tracks[tIdx].img = path;
+          req.body.tracks[tIdx].img = url;
         }
       } else if (file.fieldname === 'packageCourseImage') {
         const pIdx = Number(req.body.targetPackageIndex);
         const cIdx = Number(req.body.targetCourseIndex);
         if (
-          !isNaN(pIdx) && 
-          !isNaN(cIdx) && 
+          !isNaN(pIdx) &&
+          !isNaN(cIdx) &&
           req.body.packages?.[pIdx]?.courses?.[cIdx]
         ) {
-          req.body.packages[pIdx].courses[cIdx].img = path;
+          req.body.packages[pIdx].courses[cIdx].img = url;
         }
       }
     }
@@ -62,10 +61,10 @@ router.use(protect);
 router.use(restrictTo('admin'));
 
 router.get('/all', getAdminInitiatives);
-router.post('/all', initiativeUpload.any(), normalizeInitiativePayload, validateRequest(createInitiativeSchema), createInitiative);
+router.post('/all', ...initiativeUpload.any(), normalizeInitiativePayload, validateRequest(createInitiativeSchema), createInitiative);
 router.get('/all/:id', getAdminInitiative);
 router.patch('/all/:id/availability', updateInitiativeAvailability);
-router.patch('/all/:id', initiativeUpload.any(), normalizeInitiativePayload, validateRequest(updateInitiativeSchema), updateInitiative);
+router.patch('/all/:id', ...initiativeUpload.any(), normalizeInitiativePayload, validateRequest(updateInitiativeSchema), updateInitiative);
 router.delete('/all/:id', deleteInitiative);
 router.get('/', getAdminInitiativeCourses);
 router.post('/', validateRequest(createInitiativeCourseSchema), createInitiativeCourse);

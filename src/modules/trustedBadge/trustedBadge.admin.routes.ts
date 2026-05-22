@@ -28,7 +28,7 @@ router.use(restrictTo('admin'));
 router.get('/', getTrustedBadgeContent);
 router.put(
   '/',
-  trustedBadgeUpload.any(),
+  ...trustedBadgeUpload.any(),
   normalizeTrustedBadgePayload,
   validateRequest(updateTrustedBadgeContentSchema),
   updateTrustedBadgeContent

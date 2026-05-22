@@ -22,7 +22,7 @@ export const normalizeCourseFormData = (req: Request, res: Response, next: NextF
     req.body.baseEnrollmentCount = Number(req.body.baseEnrollmentCount);
   }
   if (req.file) {
-    req.body.img = `/uploads/courses/${req.file.filename}`;
+    req.body.img = req.file.path;
   }
   next();
 };

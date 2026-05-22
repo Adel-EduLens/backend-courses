@@ -1,7 +1,6 @@
-import path from 'path';
 import type { NextFunction, Request, Response } from 'express';
 import TrustedBadgeContent from './trustedBadge.model.js';
-import { deleteFile, getRelativePathFromUrl } from '../../utils/fileSystem.util.js';
+import { deleteFile } from '../../utils/fileSystem.util.js';
 
 const DEFAULT_TITLE = 'Trusted by 26+ Schools & Institutions';
 const DEFAULT_SUBTITLE = 'Serving educators across Egypt and the Gulf Region';
@@ -12,10 +11,7 @@ interface NormalizedBadge {
   logo: string;
 }
 
-const getFileUrl = (file: Express.Multer.File) => {
-  const relativePath = path.relative(path.resolve('public'), file.path).split(path.sep).join('/');
-  return `/${relativePath}`;
-};
+const getFileUrl = (file: Express.Multer.File) => file.path;
 
 const getUploadedBadgeFiles = (req: Request) => {
   const files = Array.isArray(req.files) ? (req.files as Express.Multer.File[]) : [];
@@ -23,15 +19,14 @@ const getUploadedBadgeFiles = (req: Request) => {
 };
 
 const deleteUploadedFiles = async (files: Express.Multer.File[]) => {
-  await Promise.all(files.map((file) => deleteFile(path.resolve(file.path))));
+  await Promise.all(files.map((file) => deleteFile(file.path)));
 };
 
 const deleteBadgeLogos = async (logos: string[]) => {
   await Promise.all(
     logos.map(async (logo) => {
-      const relativePath = getRelativePathFromUrl(logo);
-      if (!relativePath) return;
-      await deleteFile(path.resolve('public', relativePath));
+      if (!logo) return;
+      await deleteFile(logo);
     })
   );
 };

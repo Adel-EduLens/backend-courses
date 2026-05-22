@@ -1,42 +1,52 @@
 import multer from "multer";
-import fs from "fs";
-import path from "path";
-import slugify from "../utils/slugify.util.js";
 import { format } from "date-fns";
-import type { Request } from "express";
+import type { Request, Response, NextFunction } from "express";
+import { uploadToS3 } from "../utils/s3.service.js";
 
 interface MulterMiddlewareOptions {
   getPath: (req: Request) => string[];
 }
 
 const multerMiddleware = ({ getPath }: MulterMiddlewareOptions) => {
-   const storage = multer.diskStorage({
-      destination: (req, file, cb) => {
-         const folders = getPath(req);
-         const safeFolders = folders.map((f) => slugify(f));
-         const destinationPath = path.resolve("public/uploads", ...safeFolders);
+  const storage = multer.memoryStorage();
+  const multerInstance = multer({ storage });
 
-         if (!fs.existsSync(destinationPath)) {
-            fs.mkdirSync(destinationPath, { recursive: true });
-         }
+  const uploadToS3Middleware = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      if (!req.files && !req.file) return next();
 
-         cb(null, destinationPath);
-      },
-      filename: (req, file, cb) => {
-         const cleanName = file.originalname
-            .toLowerCase()
-            .replace(/\s+/g, "-")
-            .replace(/[^a-z0-9.\-]/g, "");
-         const formattedDate = format(
-            new Date(),
-            "yyyy-MM-dd_hh-mm-ss-a"
-         ).toLowerCase();
-         const uniqueName = `${formattedDate}_${cleanName}`;
-         cb(null, uniqueName);
-      },
-   });
+      const files = req.file ? [req.file] : (Array.isArray(req.files) ? req.files : []);
+      const folders = getPath(req);
 
-   return multer({ storage });
+      for (const file of files) {
+        const cleanName = file.originalname
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9.\-]/g, "");
+        const formattedDate = format(new Date(), "yyyy-MM-dd_hh-mm-ss-a").toLowerCase();
+        const uniqueName = `${formattedDate}_${cleanName}`;
+        const key = `uploads/${folders.join("/")}/${uniqueName}`;
+
+        const url = await uploadToS3(file.buffer, key, file.mimetype);
+        // Store the S3 URL in the file object so controllers can access it
+        file.path = url;
+        file.filename = uniqueName;
+      }
+
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  // Return a proxy that wraps multer methods to add S3 upload middleware
+  return {
+    single: (fieldName: string) => [multerInstance.single(fieldName), uploadToS3Middleware],
+    array: (fieldName: string, maxCount?: number) => [multerInstance.array(fieldName, maxCount), uploadToS3Middleware],
+    any: () => [multerInstance.any(), uploadToS3Middleware],
+    fields: (fields: multer.Field[]) => [multerInstance.fields(fields), uploadToS3Middleware],
+    none: () => multerInstance.none(),
+  };
 };
 
 export default multerMiddleware;
