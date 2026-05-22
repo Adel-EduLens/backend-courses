@@ -684,7 +684,7 @@ export const createCourse = async (req: Request, res: Response, next: NextFuncti
   try {
     const courseData = { ...req.body };
     if (req.file) {
-      courseData.img = `/uploads/courses/${req.file.filename}`;
+      courseData.img = req.file.path;
     }
 
     if (typeof courseData.aboutCourse === 'string') {
@@ -721,7 +721,7 @@ export const updateCourse = async (req: Request, res: Response, next: NextFuncti
   try {
     const courseData = { ...req.body };
     if (req.file) {
-      courseData.img = `/uploads/courses/${req.file.filename}`;
+      courseData.img = req.file.path;
     }
 
     if (typeof courseData.aboutCourse === 'string') {
