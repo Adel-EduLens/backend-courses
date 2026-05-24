@@ -21,6 +21,8 @@ import promoCodeRoutes from './modules/promoCode/promoCode.routes.js';
 import promoCodeAdminRoutes from './modules/promoCode/promoCode.admin.routes.js';
 import sponsorRequestRoutes from './modules/sponsorRequest/sponsorRequest.routes.js';
 import sponsorRequestAdminRoutes from './modules/sponsorRequest/sponsorRequest.admin.routes.js';
+import coverRoutes from './modules/cover/cover.routes.js';
+import coverAdminRoutes from './modules/cover/cover.admin.routes.js';
 
 const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.development';
 dotenv.config({ path: envFile });
@@ -60,6 +62,8 @@ app.use('/api/promo-codes', promoCodeRoutes);
 app.use('/api/admin/promo-codes', promoCodeAdminRoutes);
 app.use('/api/sponsor-requests', sponsorRequestRoutes);
 app.use('/api/admin/sponsor-requests', sponsorRequestAdminRoutes);
+app.use('/api/cover', coverRoutes);
+app.use('/api/admin/cover', coverAdminRoutes);
 
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello from TypeScript Express with MongoDB!');
