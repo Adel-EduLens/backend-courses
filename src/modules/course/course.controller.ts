@@ -22,7 +22,10 @@ const lectureDateTimeFormatter = new Intl.DateTimeFormat('en-EG', {
 const formatLectureStartTime = (date: Date) => lectureDateTimeFormatter.format(date);
 
 const normalizePhoneForWapilot = (phone: string) => {
+  const trimmedPhone = phone.trim();
   const digits = phone.replace(/[^0-9]/g, '');
+  if (trimmedPhone.startsWith('+')) return digits;
+  if (digits.startsWith('00')) return digits.slice(2);
   if (digits.startsWith('20')) return digits;
   if (digits.startsWith('0')) return '2' + digits;
   return '20' + digits;
