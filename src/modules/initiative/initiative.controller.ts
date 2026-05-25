@@ -42,6 +42,7 @@ type InitiativePayload = {
   packages: InitiativePackagePayload[];
   startDate: string;
   endDate: string;
+  baseEnrollmentCount?: number;
   isAvailable?: boolean;
 };
 
@@ -666,6 +667,7 @@ export const createInitiative = async (req: Request, res: Response, next: NextFu
       img: payload.img,
       startDate: payload.startDate,
       endDate: payload.endDate,
+      baseEnrollmentCount: payload.baseEnrollmentCount ?? 0,
       isAvailable: payload.isAvailable ?? true,
       ...courseReferences
     } as any);
@@ -705,6 +707,7 @@ export const updateInitiative = async (req: Request, res: Response, next: NextFu
       img: payload.img,
       startDate: payload.startDate,
       endDate: payload.endDate,
+      ...(payload.baseEnrollmentCount !== undefined ? { baseEnrollmentCount: payload.baseEnrollmentCount } : {}),
       ...(payload.isAvailable !== undefined ? { isAvailable: payload.isAvailable } : {}),
       ...courseReferences
     } as any, {
