@@ -15,10 +15,24 @@ const signToken = (id: string, role: string) => {
 
 const generateOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
-const saveAndSendOtp = async (student: any, phone: string) => {
+const DEFAULT_OTP_DURATION_MS = 2 * 60 * 1000;
+const REGISTER_OTP_DURATION_MS = 3 * 60 * 60 * 1000;
+
+const hasValidOtp = (student: any) => Boolean(
+  student.otpCode &&
+  student.otpExpiresAt &&
+  new Date() <= student.otpExpiresAt
+);
+
+const buildOtpResponse = (student: any, otpSent: boolean) => ({
+  otpExpiresAt: student.otpExpiresAt?.toISOString(),
+  otpSent
+});
+
+const saveAndSendOtp = async (student: any, phone: string, durationMs = DEFAULT_OTP_DURATION_MS) => {
   const otpCode = generateOtp();
   student.otpCode = otpCode;
-  student.otpExpiresAt = new Date(Date.now() + 2 * 60 * 1000);
+  student.otpExpiresAt = new Date(Date.now() + durationMs);
   await student.save();
   await sendSingleMessage(phone, `Your verification code is: ${otpCode}`);
 };
@@ -119,7 +133,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
   try {
     const { name, email, phone, password } = req.body;
 
-    const existing = await Student.findOne({ phone });
+    const existing = await Student.findOne({ phone }).select('+otpCode +otpExpiresAt');
     if (existing?.isVerified) {
       return next(new AppError('A user with this phone number already exists', 400));
     }
@@ -131,10 +145,21 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       student.password = password;
     }
 
-    await saveAndSendOtp(student, phone);
+    if (existing && hasValidOtp(existing)) {
+      await student.save();
+
+      return successResponse(res, {
+        message: 'Verification code already sent to your WhatsApp',
+        data: buildOtpResponse(student, false),
+        statusCode: 200
+      });
+    }
+
+    await saveAndSendOtp(student, phone, REGISTER_OTP_DURATION_MS);
 
     successResponse(res, {
       message: 'Verification code sent to your WhatsApp',
+      data: buildOtpResponse(student, true),
       statusCode: 200
     });
   } catch (error) {
@@ -188,7 +213,7 @@ export const resendRegisterOtp = async (req: Request, res: Response, next: NextF
   try {
     const { phone } = req.body;
 
-    const student = await Student.findOne({ phone });
+    const student = await Student.findOne({ phone }).select('+otpCode +otpExpiresAt');
     if (!student) {
       return next(new AppError('Student not found. Please register first.', 404));
     }
@@ -197,10 +222,18 @@ export const resendRegisterOtp = async (req: Request, res: Response, next: NextF
       return next(new AppError('This account is already verified. Please login instead.', 400));
     }
 
-    await saveAndSendOtp(student, phone);
+    if (hasValidOtp(student)) {
+      return successResponse(res, {
+        message: 'Verification code already sent to your WhatsApp',
+        data: buildOtpResponse(student, false)
+      });
+    }
+
+    await saveAndSendOtp(student, phone, REGISTER_OTP_DURATION_MS);
 
     successResponse(res, {
-      message: 'A new verification code was sent to your WhatsApp'
+      message: 'A new verification code was sent to your WhatsApp',
+      data: buildOtpResponse(student, true)
     });
   } catch (error) {
     next(error);
